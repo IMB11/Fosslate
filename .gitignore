@@ -1,0 +1,32 @@
+.DS_Store
+
+# Local agent/editor state
+.agents/
+.claude/
+.codex/
+.cursor/
+.windsurf/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# JavaScript
+node_modules/
+**/node_modules/
+.next/
+**/.next/
+out/
+dist/
+coverage/
+
+# Rust
+target/
+**/target/
+
+# Logs and caches
+*.log
+.turbo/
+.pnpm-store/
+
