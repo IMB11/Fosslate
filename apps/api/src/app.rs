@@ -5,11 +5,12 @@ use axum::{
 use sqlx::PgPool;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 
-use crate::{config::Config, routes};
+use crate::{config::Config, routes, services::Services};
 
 #[derive(Clone)]
 pub struct AppState {
     pub db: PgPool,
+    pub services: Services,
     pub app_name: &'static str,
     pub version: &'static str,
 }
@@ -17,6 +18,7 @@ pub struct AppState {
 impl AppState {
     pub fn new(db: PgPool) -> Self {
         Self {
+            services: Services::new(db.clone()),
             db,
             app_name: "Fosslate",
             version: env!("CARGO_PKG_VERSION"),
@@ -35,7 +37,7 @@ pub fn build(state: AppState, config: &Config) -> Router {
             Ok(origin) => router.layer(
                 CorsLayer::new()
                     .allow_origin(origin)
-                    .allow_methods([Method::GET])
+                    .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE])
                     .allow_headers([header::CONTENT_TYPE]),
             ),
             Err(error) => {
@@ -46,4 +48,3 @@ pub fn build(state: AppState, config: &Config) -> Router {
         None => router,
     }
 }
-

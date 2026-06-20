@@ -1,14 +1,6 @@
-mod app;
-mod config;
-mod db;
-mod error;
-mod openapi;
-mod routes;
-
+use fosslate_api::{app, app::AppState, config::Config, db};
 use tokio::net::TcpListener;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
-
-use crate::{app::AppState, config::Config};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
