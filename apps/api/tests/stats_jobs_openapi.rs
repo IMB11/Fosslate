@@ -438,6 +438,44 @@ async fn openapi_json_contains_route_groups_and_core_paths() {
         assert!(paths.contains_key(path), "missing OpenAPI path {path}");
     }
 
+    for (path, item) in paths {
+        let item = item.as_object().unwrap();
+        for method in ["get", "post", "put", "delete"] {
+            let Some(operation) = item.get(method) else {
+                continue;
+            };
+
+            assert!(
+                operation["summary"]
+                    .as_str()
+                    .is_some_and(|summary| !summary.is_empty()),
+                "missing summary for {method} {path}"
+            );
+            assert!(
+                operation["description"]
+                    .as_str()
+                    .is_some_and(|description| !description.is_empty()),
+                "missing description for {method} {path}"
+            );
+            assert!(
+                operation["operationId"]
+                    .as_str()
+                    .is_some_and(|operation_id| !operation_id.is_empty()),
+                "missing operationId for {method} {path}"
+            );
+
+            if path != "/health" {
+                let responses = operation["responses"].as_object().unwrap();
+                assert!(
+                    responses
+                        .keys()
+                        .any(|status| status.starts_with('4') || status.starts_with('5')),
+                    "missing documented error response for {method} {path}"
+                );
+            }
+        }
+    }
+
     app.cleanup().await;
 }
 

@@ -14,13 +14,17 @@ use crate::{
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct SourceStringRequest {
+    /// Stable key for the source string within its namespace, for example `nav.home`.
     pub identifier: String,
+    /// Source-language text that translators will translate.
     pub value: String,
 }
 
 #[derive(Debug, Deserialize, utoipa::IntoParams)]
 pub struct ListStringsQuery {
+    /// Return strings with IDs greater than this value. Omit for the first page.
     pub after_id: Option<i64>,
+    /// Maximum number of strings to return. Defaults to 100 and is clamped to 1-500.
     pub limit: Option<i64>,
 }
 
@@ -28,12 +32,20 @@ pub struct ListStringsQuery {
     post,
     path = "/api/v1/projects/{project_public_id}/namespaces/{namespace_id}/strings",
     tag = "strings",
+    operation_id = "create_source_string",
+    summary = "Create a source string",
+    description = "Creates a source-language string inside an active namespace and refreshes namespace-language stats for existing target languages.",
     params(
-        ("project_public_id" = Uuid, Path, description = "Project public ID"),
-        ("namespace_id" = i64, Path, description = "Namespace ID")
+        ("project_public_id" = Uuid, Path, description = "Public UUID of the project that owns the namespace."),
+        ("namespace_id" = i64, Path, description = "Numeric namespace ID that will receive the source string.")
     ),
-    request_body = SourceStringRequest,
-    responses((status = 201, description = "Source string created", body = SourceString))
+    request_body(content = SourceStringRequest, description = "Source string identifier and source-language value."),
+    responses(
+        (status = 201, description = "Source string created.", body = SourceString),
+        (status = 404, description = "Project or namespace was not found, or either has been deleted.", body = crate::error::ErrorBody),
+        (status = 409, description = "An active source string with the same identifier already exists in this namespace.", body = crate::error::ErrorBody),
+        (status = 500, description = "Database request failed.", body = crate::error::ErrorBody)
+    )
 )]
 pub async fn create_source_string(
     State(state): State<AppState>,
@@ -57,12 +69,19 @@ pub async fn create_source_string(
     get,
     path = "/api/v1/projects/{project_public_id}/namespaces/{namespace_id}/strings",
     tag = "strings",
+    operation_id = "list_source_strings",
+    summary = "List source strings",
+    description = "Returns active source strings in one namespace using forward-only keyset pagination ordered by source string ID.",
     params(
-        ("project_public_id" = Uuid, Path, description = "Project public ID"),
-        ("namespace_id" = i64, Path, description = "Namespace ID"),
+        ("project_public_id" = Uuid, Path, description = "Public UUID of the project that owns the namespace."),
+        ("namespace_id" = i64, Path, description = "Numeric namespace ID whose source strings should be listed."),
         ListStringsQuery
     ),
-    responses((status = 200, description = "Source strings", body = [SourceString]))
+    responses(
+        (status = 200, description = "Active source strings ordered by ID.", body = [SourceString]),
+        (status = 404, description = "Project or namespace was not found, or either has been deleted.", body = crate::error::ErrorBody),
+        (status = 500, description = "Database request failed.", body = crate::error::ErrorBody)
+    )
 )]
 pub async fn list_source_strings(
     State(state): State<AppState>,
@@ -86,11 +105,18 @@ pub async fn list_source_strings(
     get,
     path = "/api/v1/projects/{project_public_id}/strings/{string_id}",
     tag = "strings",
+    operation_id = "get_source_string",
+    summary = "Get a source string",
+    description = "Fetches one active source string by numeric string ID within the project.",
     params(
-        ("project_public_id" = Uuid, Path, description = "Project public ID"),
-        ("string_id" = i64, Path, description = "Source string ID")
+        ("project_public_id" = Uuid, Path, description = "Public UUID of the project that owns the source string."),
+        ("string_id" = i64, Path, description = "Numeric source string ID returned by the string list or create endpoint.")
     ),
-    responses((status = 200, description = "Source string", body = SourceString))
+    responses(
+        (status = 200, description = "Source string found.", body = SourceString),
+        (status = 404, description = "Project or source string was not found, or either has been deleted.", body = crate::error::ErrorBody),
+        (status = 500, description = "Database request failed.", body = crate::error::ErrorBody)
+    )
 )]
 pub async fn get_source_string(
     State(state): State<AppState>,
@@ -109,12 +135,20 @@ pub async fn get_source_string(
     put,
     path = "/api/v1/projects/{project_public_id}/strings/{string_id}",
     tag = "strings",
+    operation_id = "update_source_string",
+    summary = "Update a source string",
+    description = "Replaces the identifier and source-language value for an active source string.",
     params(
-        ("project_public_id" = Uuid, Path, description = "Project public ID"),
-        ("string_id" = i64, Path, description = "Source string ID")
+        ("project_public_id" = Uuid, Path, description = "Public UUID of the project that owns the source string."),
+        ("string_id" = i64, Path, description = "Numeric source string ID returned by the string list or create endpoint.")
     ),
-    request_body = SourceStringRequest,
-    responses((status = 200, description = "Source string updated", body = SourceString))
+    request_body(content = SourceStringRequest, description = "Replacement source string fields."),
+    responses(
+        (status = 200, description = "Source string updated.", body = SourceString),
+        (status = 404, description = "Project or source string was not found, or either has been deleted.", body = crate::error::ErrorBody),
+        (status = 409, description = "An active source string with the same identifier already exists in this namespace.", body = crate::error::ErrorBody),
+        (status = 500, description = "Database request failed.", body = crate::error::ErrorBody)
+    )
 )]
 pub async fn update_source_string(
     State(state): State<AppState>,
@@ -139,11 +173,18 @@ pub async fn update_source_string(
     delete,
     path = "/api/v1/projects/{project_public_id}/strings/{string_id}",
     tag = "strings",
+    operation_id = "delete_source_string",
+    summary = "Delete a source string",
+    description = "Soft-deletes a source string and refreshes namespace-language stats for its namespace.",
     params(
-        ("project_public_id" = Uuid, Path, description = "Project public ID"),
-        ("string_id" = i64, Path, description = "Source string ID")
+        ("project_public_id" = Uuid, Path, description = "Public UUID of the project that owns the source string."),
+        ("string_id" = i64, Path, description = "Numeric source string ID returned by the string list or create endpoint.")
     ),
-    responses((status = 204, description = "Source string deleted"))
+    responses(
+        (status = 204, description = "Source string deleted."),
+        (status = 404, description = "Project or source string was not found, or either has been deleted.", body = crate::error::ErrorBody),
+        (status = 500, description = "Database request failed.", body = crate::error::ErrorBody)
+    )
 )]
 pub async fn delete_source_string(
     State(state): State<AppState>,

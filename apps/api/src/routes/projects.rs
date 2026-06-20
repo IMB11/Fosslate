@@ -15,8 +15,11 @@ use crate::{
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct CreateProjectRequest {
+    /// Human-readable project name shown in project lists and detail views.
     pub name: String,
+    /// Optional asset ID for the project icon. `null` means no icon is attached.
     pub icon_asset_id: Option<i64>,
+    /// Source language that original strings are authored in.
     pub source_language: Language,
 }
 
@@ -32,8 +35,11 @@ impl From<CreateProjectRequest> for CreateProject {
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct UpdateProjectRequest {
+    /// Replacement human-readable project name.
     pub name: String,
+    /// Replacement icon asset ID. Send `null` to clear the icon.
     pub icon_asset_id: Option<i64>,
+    /// Replacement source language for newly authored source strings.
     pub source_language: Language,
 }
 
@@ -51,8 +57,14 @@ impl From<UpdateProjectRequest> for UpdateProject {
     post,
     path = "/api/v1/projects",
     tag = "projects",
-    request_body = CreateProjectRequest,
-    responses((status = 201, description = "Project created", body = Project))
+    operation_id = "create_project",
+    summary = "Create a project",
+    description = "Creates a translation project and returns both the internal numeric ID and the public UUID used by client-facing project routes.",
+    request_body(content = CreateProjectRequest, description = "Project attributes to create."),
+    responses(
+        (status = 201, description = "Project created.", body = Project),
+        (status = 500, description = "Database request failed.", body = crate::error::ErrorBody)
+    )
 )]
 pub async fn create_project(
     State(state): State<AppState>,
@@ -70,7 +82,13 @@ pub async fn create_project(
     get,
     path = "/api/v1/projects",
     tag = "projects",
-    responses((status = 200, description = "Projects", body = [Project]))
+    operation_id = "list_projects",
+    summary = "List projects",
+    description = "Returns all active projects ordered by internal project ID. Soft-deleted projects are omitted.",
+    responses(
+        (status = 200, description = "Active projects ordered by ID.", body = [Project]),
+        (status = 500, description = "Database request failed.", body = crate::error::ErrorBody)
+    )
 )]
 pub async fn list_projects(State(state): State<AppState>) -> AppResult<Json<Vec<Project>>> {
     Ok(Json(state.services.projects.list_projects().await?))
@@ -80,8 +98,15 @@ pub async fn list_projects(State(state): State<AppState>) -> AppResult<Json<Vec<
     get,
     path = "/api/v1/projects/{project_public_id}",
     tag = "projects",
-    params(("project_public_id" = Uuid, Path, description = "Project public ID")),
-    responses((status = 200, description = "Project", body = Project))
+    operation_id = "get_project",
+    summary = "Get a project",
+    description = "Fetches one active project by its public UUID.",
+    params(("project_public_id" = Uuid, Path, description = "Public project UUID returned as `public_id` when the project is created.")),
+    responses(
+        (status = 200, description = "Project found.", body = Project),
+        (status = 404, description = "Project was not found or has been deleted.", body = crate::error::ErrorBody),
+        (status = 500, description = "Database request failed.", body = crate::error::ErrorBody)
+    )
 )]
 pub async fn get_project(
     State(state): State<AppState>,
@@ -100,9 +125,16 @@ pub async fn get_project(
     put,
     path = "/api/v1/projects/{project_public_id}",
     tag = "projects",
-    params(("project_public_id" = Uuid, Path, description = "Project public ID")),
-    request_body = UpdateProjectRequest,
-    responses((status = 200, description = "Project updated", body = Project))
+    operation_id = "update_project",
+    summary = "Update a project",
+    description = "Replaces the editable project fields for an active project.",
+    params(("project_public_id" = Uuid, Path, description = "Public project UUID returned as `public_id` when the project is created.")),
+    request_body(content = UpdateProjectRequest, description = "Replacement project attributes."),
+    responses(
+        (status = 200, description = "Project updated.", body = Project),
+        (status = 404, description = "Project was not found or has been deleted.", body = crate::error::ErrorBody),
+        (status = 500, description = "Database request failed.", body = crate::error::ErrorBody)
+    )
 )]
 pub async fn update_project(
     State(state): State<AppState>,
@@ -122,8 +154,14 @@ pub async fn update_project(
     delete,
     path = "/api/v1/projects/{project_public_id}",
     tag = "projects",
-    params(("project_public_id" = Uuid, Path, description = "Project public ID")),
-    responses((status = 204, description = "Project deleted"))
+    operation_id = "delete_project",
+    summary = "Delete a project",
+    description = "Soft-deletes the project so it no longer appears in project reads. The operation is idempotent for already-deleted or unknown project UUIDs.",
+    params(("project_public_id" = Uuid, Path, description = "Public project UUID returned as `public_id` when the project is created.")),
+    responses(
+        (status = 204, description = "Project delete accepted."),
+        (status = 500, description = "Database request failed.", body = crate::error::ErrorBody)
+    )
 )]
 pub async fn delete_project(
     State(state): State<AppState>,

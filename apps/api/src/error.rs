@@ -19,6 +19,7 @@ pub enum AppError {
 
 #[derive(Serialize, utoipa::ToSchema)]
 pub struct ErrorBody {
+    /// Machine-readable error code such as `not_found`, `conflict`, `bad_request`, or `internal_server_error`.
     #[schema(value_type = String)]
     pub error: &'static str,
 }

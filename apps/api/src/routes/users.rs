@@ -9,6 +9,7 @@ use crate::{app::AppState, error::AppResult, models::User};
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct CreateUserRequest {
+    /// Unique username for the temporary user record. Leading and trailing whitespace is trimmed.
     pub username: String,
 }
 
@@ -16,8 +17,15 @@ pub struct CreateUserRequest {
     post,
     path = "/api/v1/users",
     tag = "users",
-    request_body = CreateUserRequest,
-    responses((status = 201, description = "User created", body = User))
+    operation_id = "create_user",
+    summary = "Create a user",
+    description = "Creates a temporary user account used as a translation author, voter, or reviewer.",
+    request_body(content = CreateUserRequest, description = "User attributes to create."),
+    responses(
+        (status = 201, description = "User created.", body = User),
+        (status = 409, description = "A user with the same username already exists.", body = crate::error::ErrorBody),
+        (status = 500, description = "Database request failed.", body = crate::error::ErrorBody)
+    )
 )]
 pub async fn create_user(
     State(state): State<AppState>,
@@ -31,7 +39,13 @@ pub async fn create_user(
     get,
     path = "/api/v1/users",
     tag = "users",
-    responses((status = 200, description = "Users", body = [User]))
+    operation_id = "list_users",
+    summary = "List users",
+    description = "Returns all temporary users ordered by user ID.",
+    responses(
+        (status = 200, description = "Users ordered by ID.", body = [User]),
+        (status = 500, description = "Database request failed.", body = crate::error::ErrorBody)
+    )
 )]
 pub async fn list_users(State(state): State<AppState>) -> AppResult<Json<Vec<User>>> {
     Ok(Json(state.services.users.list_users().await?))
@@ -41,8 +55,15 @@ pub async fn list_users(State(state): State<AppState>) -> AppResult<Json<Vec<Use
     get,
     path = "/api/v1/users/{user_id}",
     tag = "users",
-    params(("user_id" = i64, Path, description = "User ID")),
-    responses((status = 200, description = "User", body = User))
+    operation_id = "get_user",
+    summary = "Get a user",
+    description = "Fetches one temporary user by numeric user ID.",
+    params(("user_id" = i64, Path, description = "Numeric user ID returned by user create or list endpoints.")),
+    responses(
+        (status = 200, description = "User found.", body = User),
+        (status = 404, description = "User was not found.", body = crate::error::ErrorBody),
+        (status = 500, description = "Database request failed.", body = crate::error::ErrorBody)
+    )
 )]
 pub async fn get_user(
     State(state): State<AppState>,

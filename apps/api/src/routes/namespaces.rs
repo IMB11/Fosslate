@@ -10,6 +10,7 @@ use crate::{app::AppState, error::AppResult, models::Namespace};
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct NamespaceRequest {
+    /// Namespace name unique within the active project, for example `common` or `checkout`.
     pub name: String,
 }
 
@@ -17,9 +18,17 @@ pub struct NamespaceRequest {
     post,
     path = "/api/v1/projects/{project_public_id}/namespaces",
     tag = "namespaces",
-    params(("project_public_id" = Uuid, Path, description = "Project public ID")),
-    request_body = NamespaceRequest,
-    responses((status = 201, description = "Namespace created", body = Namespace))
+    operation_id = "create_namespace",
+    summary = "Create a namespace",
+    description = "Creates a namespace inside an active project and initializes stats rows for existing target languages.",
+    params(("project_public_id" = Uuid, Path, description = "Public UUID of the project that will own the namespace.")),
+    request_body(content = NamespaceRequest, description = "Namespace attributes to create."),
+    responses(
+        (status = 201, description = "Namespace created.", body = Namespace),
+        (status = 404, description = "Project was not found or has been deleted.", body = crate::error::ErrorBody),
+        (status = 409, description = "An active namespace with the same name already exists in this project.", body = crate::error::ErrorBody),
+        (status = 500, description = "Database request failed.", body = crate::error::ErrorBody)
+    )
 )]
 pub async fn create_namespace(
     State(state): State<AppState>,
@@ -38,8 +47,15 @@ pub async fn create_namespace(
     get,
     path = "/api/v1/projects/{project_public_id}/namespaces",
     tag = "namespaces",
-    params(("project_public_id" = Uuid, Path, description = "Project public ID")),
-    responses((status = 200, description = "Namespaces", body = [Namespace]))
+    operation_id = "list_namespaces",
+    summary = "List namespaces",
+    description = "Returns active namespaces for one project ordered by namespace ID.",
+    params(("project_public_id" = Uuid, Path, description = "Public UUID of the project whose namespaces should be listed.")),
+    responses(
+        (status = 200, description = "Active namespaces ordered by ID.", body = [Namespace]),
+        (status = 404, description = "Project was not found or has been deleted.", body = crate::error::ErrorBody),
+        (status = 500, description = "Database request failed.", body = crate::error::ErrorBody)
+    )
 )]
 pub async fn list_namespaces(
     State(state): State<AppState>,
@@ -58,11 +74,18 @@ pub async fn list_namespaces(
     get,
     path = "/api/v1/projects/{project_public_id}/namespaces/{namespace_id}",
     tag = "namespaces",
+    operation_id = "get_namespace",
+    summary = "Get a namespace",
+    description = "Fetches one active namespace by numeric namespace ID within the project.",
     params(
-        ("project_public_id" = Uuid, Path, description = "Project public ID"),
-        ("namespace_id" = i64, Path, description = "Namespace ID")
+        ("project_public_id" = Uuid, Path, description = "Public UUID of the project that owns the namespace."),
+        ("namespace_id" = i64, Path, description = "Numeric namespace ID returned by the namespace list or create endpoint.")
     ),
-    responses((status = 200, description = "Namespace", body = Namespace))
+    responses(
+        (status = 200, description = "Namespace found.", body = Namespace),
+        (status = 404, description = "Project or namespace was not found, or either has been deleted.", body = crate::error::ErrorBody),
+        (status = 500, description = "Database request failed.", body = crate::error::ErrorBody)
+    )
 )]
 pub async fn get_namespace(
     State(state): State<AppState>,
@@ -81,12 +104,20 @@ pub async fn get_namespace(
     put,
     path = "/api/v1/projects/{project_public_id}/namespaces/{namespace_id}",
     tag = "namespaces",
+    operation_id = "update_namespace",
+    summary = "Update a namespace",
+    description = "Renames an active namespace within the project.",
     params(
-        ("project_public_id" = Uuid, Path, description = "Project public ID"),
-        ("namespace_id" = i64, Path, description = "Namespace ID")
+        ("project_public_id" = Uuid, Path, description = "Public UUID of the project that owns the namespace."),
+        ("namespace_id" = i64, Path, description = "Numeric namespace ID returned by the namespace list or create endpoint.")
     ),
-    request_body = NamespaceRequest,
-    responses((status = 200, description = "Namespace updated", body = Namespace))
+    request_body(content = NamespaceRequest, description = "Replacement namespace attributes."),
+    responses(
+        (status = 200, description = "Namespace updated.", body = Namespace),
+        (status = 404, description = "Project or namespace was not found, or either has been deleted.", body = crate::error::ErrorBody),
+        (status = 409, description = "An active namespace with the same name already exists in this project.", body = crate::error::ErrorBody),
+        (status = 500, description = "Database request failed.", body = crate::error::ErrorBody)
+    )
 )]
 pub async fn update_namespace(
     State(state): State<AppState>,
@@ -106,11 +137,18 @@ pub async fn update_namespace(
     delete,
     path = "/api/v1/projects/{project_public_id}/namespaces/{namespace_id}",
     tag = "namespaces",
+    operation_id = "delete_namespace",
+    summary = "Delete a namespace",
+    description = "Soft-deletes a namespace. Deleting an unknown or already-deleted namespace is treated as a no-op once the project exists.",
     params(
-        ("project_public_id" = Uuid, Path, description = "Project public ID"),
-        ("namespace_id" = i64, Path, description = "Namespace ID")
+        ("project_public_id" = Uuid, Path, description = "Public UUID of the project that owns the namespace."),
+        ("namespace_id" = i64, Path, description = "Numeric namespace ID returned by the namespace list or create endpoint.")
     ),
-    responses((status = 204, description = "Namespace deleted"))
+    responses(
+        (status = 204, description = "Namespace delete accepted."),
+        (status = 404, description = "Project was not found or has been deleted.", body = crate::error::ErrorBody),
+        (status = 500, description = "Database request failed.", body = crate::error::ErrorBody)
+    )
 )]
 pub async fn delete_namespace(
     State(state): State<AppState>,

@@ -63,20 +63,20 @@ use crate::app::AppState;
         )
     ),
     tags(
-        (name = "approvals", description = "Translation approval endpoints"),
-        (name = "health", description = "Health check endpoints"),
-        (name = "languages", description = "Project target language endpoints"),
-        (name = "meta", description = "Application metadata endpoints"),
-        (name = "namespaces", description = "Namespace endpoints"),
-        (name = "projects", description = "Project endpoints"),
-        (name = "strings", description = "Source string endpoints"),
-        (name = "translations", description = "Translation candidate endpoints"),
-        (name = "users", description = "Temporary user endpoints"),
-        (name = "votes", description = "Translation vote endpoints"),
+        (name = "approvals", description = "Approve translation candidates and remove approvals for string/language pairs."),
+        (name = "health", description = "Process-level and dependency health endpoints."),
+        (name = "languages", description = "Manage target languages within a project."),
+        (name = "meta", description = "Application metadata and dependency status endpoints."),
+        (name = "namespaces", description = "Group source strings within a project."),
+        (name = "projects", description = "Create, read, update, and soft-delete translation projects."),
+        (name = "strings", description = "Manage source-language strings within namespaces."),
+        (name = "translations", description = "Create, list, and soft-delete candidate translations."),
+        (name = "users", description = "Temporary users used as authors, voters, and reviewers."),
+        (name = "votes", description = "Cast or replace votes on translation candidates."),
     ),
     info(
         title = "Fosslate API",
-        description = "HTTP API for Fosslate",
+        description = "HTTP API for Fosslate projects, namespaces, source strings, target languages, translation candidates, votes, approvals, users, and health checks.",
         version = env!("CARGO_PKG_VERSION"),
     )
 )]

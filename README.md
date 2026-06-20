@@ -3,6 +3,7 @@
 > [!WARNING]  
 > Still a WIP! Not ready for use
 
+<!-- 
 Fosslate is a self-hosted localisation platform aimed as a free alternative to Crowdin.
 
 ## Stack
@@ -53,6 +54,11 @@ Health endpoints:
 - `http://127.0.0.1:4000/health`
 - `http://127.0.0.1:4000/api/v1/meta`
 
+API documentation:
+
+- `http://127.0.0.1:4000/docs`
+- `http://127.0.0.1:4000/openapi.json`
+
 ## Run the frontend locally
 
 ```sh
@@ -89,4 +95,4 @@ The app is exposed at `http://localhost:3000`. Inside the app container, the API
 Pushes to `main` build and publish:
 
 - `ghcr.io/${{ github.repository }}:latest`
-- `ghcr.io/${{ github.repository }}:${{ github.sha }}`
+- `ghcr.io/${{ github.repository }}:${{ github.sha }}` -->
