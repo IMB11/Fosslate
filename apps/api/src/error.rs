@@ -13,8 +13,9 @@ pub enum AppError {
     Database(#[from] sqlx::Error),
 }
 
-#[derive(Serialize)]
-struct ErrorBody {
+#[derive(Serialize, utoipa::ToSchema)]
+pub struct ErrorBody {
+    #[schema(value_type = String)]
     error: &'static str,
 }
 
@@ -35,4 +36,3 @@ impl IntoResponse for AppError {
             .into_response()
     }
 }
-

@@ -2,6 +2,7 @@ mod app;
 mod config;
 mod db;
 mod error;
+mod openapi;
 mod routes;
 
 use tokio::net::TcpListener;
@@ -65,4 +66,3 @@ async fn shutdown_signal() {
 
     tracing::info!("shutdown signal received");
 }
-
