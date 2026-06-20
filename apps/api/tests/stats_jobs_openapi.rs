@@ -94,6 +94,51 @@ async fn stats_count_strings_translations_approvals_candidates_and_missing_strin
 }
 
 #[tokio::test]
+async fn stats_rows_are_initialized_when_languages_and_namespaces_are_added() {
+    let app = common::spawn_app().await;
+    let project = app.create_project("Stats Dimensions").await;
+    let first_namespace_id = app.create_namespace(&project.public_id, "common").await;
+    app.create_string(&project.public_id, first_namespace_id, "home.title", "Home")
+        .await;
+
+    let target_language_id = app
+        .add_language(&project.public_id, "fr-FR", "French")
+        .await;
+
+    assert_stats_row(
+        &app,
+        first_namespace_id,
+        target_language_id,
+        StatsRow {
+            string_count: 1,
+            translated_count: 0,
+            approved_count: 0,
+            candidate_count: 0,
+            missing_count: 1,
+        },
+    )
+    .await;
+
+    let second_namespace_id = app.create_namespace(&project.public_id, "empty").await;
+
+    assert_stats_row(
+        &app,
+        second_namespace_id,
+        target_language_id,
+        StatsRow {
+            string_count: 0,
+            translated_count: 0,
+            approved_count: 0,
+            candidate_count: 0,
+            missing_count: 0,
+        },
+    )
+    .await;
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
 async fn stats_do_not_inflate_string_count_and_update_after_deletions() {
     let app = common::spawn_app().await;
     let fixture = create_fixture(&app).await;
@@ -194,6 +239,48 @@ async fn stats_do_not_inflate_string_count_and_update_after_deletions() {
         },
     )
     .await;
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+async fn rebuild_current_translations_preserves_zero_candidate_rows() {
+    let app = common::spawn_app().await;
+    let fixture = create_fixture(&app).await;
+
+    let string_id = app
+        .create_string(
+            &fixture.project_public_id,
+            fixture.namespace_id,
+            "home.title",
+            "Home",
+        )
+        .await;
+    let translation_id = app
+        .create_translation(
+            &fixture.project_public_id,
+            string_id,
+            fixture.target_language_id,
+            fixture.author_user_id,
+            "Bienvenue",
+        )
+        .await;
+
+    app.delete(&format!(
+        "/api/v1/projects/{}/translations/{translation_id}",
+        fixture.project_public_id
+    ))
+    .await
+    .assert_status(StatusCode::NO_CONTENT);
+
+    assert_current_candidate_count(&app, string_id, fixture.target_language_id, 0).await;
+
+    let services = Services::new(app.pool().clone());
+    rebuild_projections::rebuild_current_translations(&services)
+        .await
+        .unwrap();
+
+    assert_current_candidate_count(&app, string_id, fixture.target_language_id, 0).await;
 
     app.cleanup().await;
 }
@@ -372,11 +459,7 @@ async fn create_fixture(app: &common::TestApp) -> Fixture {
     }
 }
 
-async fn approve_translation(
-    app: &common::TestApp,
-    fixture: &Fixture,
-    translation_id: i64,
-) {
+async fn approve_translation(app: &common::TestApp, fixture: &Fixture, translation_id: i64) {
     app.put_json(
         &format!(
             "/api/v1/projects/{}/translations/{translation_id}/approval",
@@ -389,6 +472,21 @@ async fn approve_translation(
 }
 
 async fn assert_stats(app: &common::TestApp, fixture: &Fixture, expected: StatsRow) {
+    assert_stats_row(
+        app,
+        fixture.namespace_id,
+        fixture.target_language_id,
+        expected,
+    )
+    .await;
+}
+
+async fn assert_stats_row(
+    app: &common::TestApp,
+    namespace_id: i64,
+    target_language_id: i64,
+    expected: StatsRow,
+) {
     let actual = sqlx::query_as::<_, StatsRow>(
         r#"
         SELECT string_count, translated_count, approved_count, candidate_count, missing_count
@@ -397,8 +495,8 @@ async fn assert_stats(app: &common::TestApp, fixture: &Fixture, expected: StatsR
           AND target_language_id = $2
         "#,
     )
-    .bind(fixture.namespace_id)
-    .bind(fixture.target_language_id)
+    .bind(namespace_id)
+    .bind(target_language_id)
     .fetch_one(app.pool())
     .await
     .unwrap();
@@ -408,6 +506,29 @@ async fn assert_stats(app: &common::TestApp, fixture: &Fixture, expected: StatsR
     assert_eq!(actual.approved_count, expected.approved_count);
     assert_eq!(actual.candidate_count, expected.candidate_count);
     assert_eq!(actual.missing_count, expected.missing_count);
+}
+
+async fn assert_current_candidate_count(
+    app: &common::TestApp,
+    string_id: i64,
+    target_language_id: i64,
+    expected: i32,
+) {
+    let candidate_count: i32 = sqlx::query_scalar(
+        r#"
+        SELECT candidate_count
+        FROM current_translations
+        WHERE string_id = $1
+          AND target_language_id = $2
+        "#,
+    )
+    .bind(string_id)
+    .bind(target_language_id)
+    .fetch_one(app.pool())
+    .await
+    .unwrap();
+
+    assert_eq!(candidate_count, expected);
 }
 
 async fn assert_current_row_count(app: &common::TestApp, fixture: &Fixture, expected: i64) {

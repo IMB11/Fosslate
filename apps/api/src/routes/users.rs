@@ -1,4 +1,8 @@
-use axum::{Json, extract::{Path, State}, http::StatusCode};
+use axum::{
+    Json,
+    extract::{Path, State},
+    http::StatusCode,
+};
 use serde::Deserialize;
 
 use crate::{app::AppState, error::AppResult, models::User};

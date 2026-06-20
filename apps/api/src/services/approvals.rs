@@ -44,7 +44,11 @@ impl ApprovalService {
             .await?;
         let best = self
             .postgres
-            .find_best_translation_in_tx(&mut tx, translation.string_id, translation.target_language_id)
+            .find_best_translation_in_tx(
+                &mut tx,
+                translation.string_id,
+                translation.target_language_id,
+            )
             .await?;
         let current = self
             .postgres
@@ -80,7 +84,9 @@ impl ApprovalService {
             .postgres
             .get_project_by_public_id(project_public_id)
             .await?;
-        self.postgres.get_source_string(project.id, string_id).await?;
+        self.postgres
+            .get_source_string(project.id, string_id)
+            .await?;
         let mut tx = self.postgres.begin().await?;
         let approval = self
             .postgres

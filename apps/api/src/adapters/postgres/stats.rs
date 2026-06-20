@@ -137,6 +137,75 @@ impl PostgresAdapter {
         Ok(())
     }
 
+    pub async fn refresh_all_target_language_namespace_stats_in_tx(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        target_language_id: i64,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            r#"
+            INSERT INTO namespace_language_stats (
+                project_id,
+                namespace_id,
+                target_language_id,
+                string_count,
+                translated_count,
+                approved_count,
+                candidate_count,
+                missing_count,
+                updated_at
+            )
+            SELECT
+                namespaces.project_id,
+                namespaces.id,
+                project_target_languages.id,
+                count(DISTINCT source_strings.id)::integer,
+                count(DISTINCT current_translations.string_id)::integer,
+                count(DISTINCT translation_approvals.string_id)::integer,
+                count(translations.id)::integer,
+                (
+                    count(DISTINCT source_strings.id)
+                    - count(DISTINCT current_translations.string_id)
+                )::integer,
+                now()
+            FROM project_target_languages
+            JOIN namespaces
+              ON namespaces.project_id = project_target_languages.project_id
+             AND namespaces.deleted_at IS NULL
+            LEFT JOIN source_strings
+              ON source_strings.namespace_id = namespaces.id
+             AND source_strings.deleted_at IS NULL
+            LEFT JOIN current_translations
+              ON current_translations.string_id = source_strings.id
+             AND current_translations.target_language_id = project_target_languages.id
+             AND current_translations.current_translation_id IS NOT NULL
+            LEFT JOIN translation_approvals
+              ON translation_approvals.string_id = source_strings.id
+             AND translation_approvals.target_language_id = project_target_languages.id
+            LEFT JOIN translations
+              ON translations.string_id = source_strings.id
+             AND translations.target_language_id = project_target_languages.id
+             AND translations.deleted_at IS NULL
+            WHERE project_target_languages.id = $1
+              AND project_target_languages.deleted_at IS NULL
+            GROUP BY namespaces.project_id, namespaces.id, project_target_languages.id
+            ON CONFLICT (namespace_id, target_language_id)
+            DO UPDATE SET
+                string_count = EXCLUDED.string_count,
+                translated_count = EXCLUDED.translated_count,
+                approved_count = EXCLUDED.approved_count,
+                candidate_count = EXCLUDED.candidate_count,
+                missing_count = EXCLUDED.missing_count,
+                updated_at = now()
+            "#,
+        )
+        .bind(target_language_id)
+        .execute(&mut **tx)
+        .await?;
+
+        Ok(())
+    }
+
     pub async fn refresh_namespace_language_stats_in_tx(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -216,5 +285,4 @@ impl PostgresAdapter {
         .fetch_one(&mut **tx)
         .await
     }
-
 }

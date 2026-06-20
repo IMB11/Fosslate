@@ -1,10 +1,12 @@
 use crate::models::Namespace;
+use sqlx::{Postgres, Transaction};
 
 use super::PostgresAdapter;
 
 impl PostgresAdapter {
-    pub async fn create_namespace(
+    pub async fn create_namespace_in_tx(
         &self,
+        tx: &mut Transaction<'_, Postgres>,
         project_id: i64,
         name: &str,
     ) -> Result<Namespace, sqlx::Error> {
@@ -17,7 +19,7 @@ impl PostgresAdapter {
         )
         .bind(project_id)
         .bind(name)
-        .fetch_one(self.pool())
+        .fetch_one(&mut **tx)
         .await
     }
 

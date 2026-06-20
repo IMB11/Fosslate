@@ -1,4 +1,4 @@
-use sqlx::{postgres::PgPoolOptions, PgPool};
+use sqlx::{PgPool, postgres::PgPoolOptions};
 
 pub async fn connect(database_url: &str) -> Result<PgPool, sqlx::Error> {
     PgPoolOptions::new()
@@ -23,4 +23,3 @@ pub async fn status(pool: &PgPool) -> &'static str {
         }
     }
 }
-

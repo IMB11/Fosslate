@@ -58,7 +58,11 @@ pub async fn create_project(
     State(state): State<AppState>,
     Json(request): Json<CreateProjectRequest>,
 ) -> AppResult<(StatusCode, Json<Project>)> {
-    let project = state.services.projects.create_project(request.into()).await?;
+    let project = state
+        .services
+        .projects
+        .create_project(request.into())
+        .await?;
     Ok((StatusCode::CREATED, Json(project)))
 }
 
@@ -83,7 +87,13 @@ pub async fn get_project(
     State(state): State<AppState>,
     Path(project_public_id): Path<Uuid>,
 ) -> AppResult<Json<Project>> {
-    Ok(Json(state.services.projects.get_project(project_public_id).await?))
+    Ok(Json(
+        state
+            .services
+            .projects
+            .get_project(project_public_id)
+            .await?,
+    ))
 }
 
 #[utoipa::path(
@@ -119,6 +129,10 @@ pub async fn delete_project(
     State(state): State<AppState>,
     Path(project_public_id): Path<Uuid>,
 ) -> AppResult<StatusCode> {
-    state.services.projects.delete_project(project_public_id).await?;
+    state
+        .services
+        .projects
+        .delete_project(project_public_id)
+        .await?;
     Ok(StatusCode::NO_CONTENT)
 }

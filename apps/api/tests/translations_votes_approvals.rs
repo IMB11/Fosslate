@@ -336,6 +336,88 @@ async fn votes_apply_score_deltas_repeated_votes_bad_votes_and_project_scope() {
 }
 
 #[tokio::test]
+async fn translation_mutations_reject_deleted_source_strings_and_target_languages() {
+    let app = common::TestApp::spawn().await;
+    let deleted_string_seed = seed_project(&app, "deleted-string-parent").await;
+    let deleted_string_translation =
+        create_translation(&app, &deleted_string_seed, "Bonjour").await;
+
+    app.delete_expect_status(
+        &format!(
+            "/api/v1/projects/{}/strings/{}",
+            deleted_string_seed.project_public_id, deleted_string_seed.string_id
+        ),
+        StatusCode::NO_CONTENT,
+    )
+    .await;
+
+    app.put_json_expect_status(
+        &format!(
+            "/api/v1/projects/{}/translations/{}/vote",
+            deleted_string_seed.project_public_id, deleted_string_translation.id
+        ),
+        &SetVoteBody {
+            user_id: deleted_string_seed.user_id,
+            vote: 1,
+        },
+        StatusCode::NOT_FOUND,
+    )
+    .await;
+
+    app.put_json_expect_status(
+        &format!(
+            "/api/v1/projects/{}/translations/{}/approval",
+            deleted_string_seed.project_public_id, deleted_string_translation.id
+        ),
+        &ApproveTranslationBody {
+            approved_by_user_id: deleted_string_seed.reviewer_id,
+        },
+        StatusCode::NOT_FOUND,
+    )
+    .await;
+
+    let deleted_language_seed = seed_project(&app, "deleted-language-parent").await;
+    let deleted_language_translation =
+        create_translation(&app, &deleted_language_seed, "Bonjour").await;
+
+    app.delete_expect_status(
+        &format!(
+            "/api/v1/projects/{}/languages/{}",
+            deleted_language_seed.project_public_id, deleted_language_seed.target_language_id
+        ),
+        StatusCode::NO_CONTENT,
+    )
+    .await;
+
+    app.put_json_expect_status(
+        &format!(
+            "/api/v1/projects/{}/translations/{}/vote",
+            deleted_language_seed.project_public_id, deleted_language_translation.id
+        ),
+        &SetVoteBody {
+            user_id: deleted_language_seed.user_id,
+            vote: 1,
+        },
+        StatusCode::NOT_FOUND,
+    )
+    .await;
+
+    app.put_json_expect_status(
+        &format!(
+            "/api/v1/projects/{}/translations/{}/approval",
+            deleted_language_seed.project_public_id, deleted_language_translation.id
+        ),
+        &ApproveTranslationBody {
+            approved_by_user_id: deleted_language_seed.reviewer_id,
+        },
+        StatusCode::NOT_FOUND,
+    )
+    .await;
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
 async fn approvals_override_reapprove_remove_fallback_missing_and_wrong_project() {
     let app = common::TestApp::spawn().await;
     let seed = seed_project(&app, "approvals").await;
@@ -347,12 +429,26 @@ async fn approvals_override_reapprove_remove_fallback_missing_and_wrong_project(
     vote(&app, seed.project_public_id, second.id, seed.user_id, 1).await;
 
     let approved_first = approve(&app, seed.project_public_id, first.id, seed.reviewer_id).await;
-    assert_current_response(&approved_first, &seed, Some(first.id), Some(first.id), Some(second.id), 2);
+    assert_current_response(
+        &approved_first,
+        &seed,
+        Some(first.id),
+        Some(first.id),
+        Some(second.id),
+        2,
+    );
 
     let current = current_translation(&app, seed.string_id, seed.target_language_id)
         .await
         .expect("approval should upsert current translation");
-    assert_current_row(&current, &seed, Some(first.id), Some(first.id), Some(second.id), 2);
+    assert_current_row(
+        &current,
+        &seed,
+        Some(first.id),
+        Some(first.id),
+        Some(second.id),
+        2,
+    );
 
     let approved_second = approve(&app, seed.project_public_id, second.id, seed.reviewer_id).await;
     assert_current_response(
@@ -645,7 +741,10 @@ async fn current_translation(
 }
 
 fn ids(translations: &[TranslationResponse]) -> Vec<i64> {
-    translations.iter().map(|translation| translation.id).collect()
+    translations
+        .iter()
+        .map(|translation| translation.id)
+        .collect()
 }
 
 fn assert_current_response(

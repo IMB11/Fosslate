@@ -1,7 +1,7 @@
 use axum::{
+    Json,
     http::StatusCode,
     response::{IntoResponse, Response},
-    Json,
 };
 use serde::Serialize;
 
@@ -29,10 +29,14 @@ impl IntoResponse for AppError {
 
         let (status, error) = match self {
             Self::Database(sqlx::Error::RowNotFound) => (StatusCode::NOT_FOUND, "not_found"),
-            Self::Database(sqlx::Error::Database(error)) if error.code().as_deref() == Some("23505") => {
+            Self::Database(sqlx::Error::Database(error))
+                if error.code().as_deref() == Some("23505") =>
+            {
                 (StatusCode::CONFLICT, "conflict")
             }
-            Self::Database(sqlx::Error::Database(error)) if error.code().as_deref() == Some("23503") => {
+            Self::Database(sqlx::Error::Database(error))
+                if error.code().as_deref() == Some("23503") =>
+            {
                 (StatusCode::NOT_FOUND, "not_found")
             }
             Self::Database(_) => (StatusCode::INTERNAL_SERVER_ERROR, "internal_server_error"),

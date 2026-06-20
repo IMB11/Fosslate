@@ -1,7 +1,7 @@
 mod common;
 
 use axum::http::StatusCode;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use sqlx::Row;
 
 use common::TestApi;
@@ -190,8 +190,8 @@ async fn deleted_projects_are_hidden_from_reads_and_updates() {
                     "name": "French"
                 }
             }),
-    )
-    .await;
+        )
+        .await;
     assert_eq!(updated.status(), StatusCode::NOT_FOUND);
 
     api.cleanup().await;

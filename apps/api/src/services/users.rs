@@ -1,8 +1,4 @@
-use crate::{
-    adapters::postgres::PostgresAdapter,
-    error::AppResult,
-    models::User,
-};
+use crate::{adapters::postgres::PostgresAdapter, error::AppResult, models::User};
 
 #[derive(Clone)]
 pub struct UserService {

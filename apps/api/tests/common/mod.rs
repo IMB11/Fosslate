@@ -64,7 +64,10 @@ impl TestApi {
 
     pub async fn put_json(&self, path: &str, body: &Value) -> TestResponse {
         TestResponse {
-            response: self.inner.request_json(Method::PUT, path, body.clone()).await,
+            response: self
+                .inner
+                .request_json(Method::PUT, path, body.clone())
+                .await,
         }
     }
 
@@ -116,12 +119,7 @@ impl TestApp {
         self.db.cleanup().await;
     }
 
-    pub async fn request_json(
-        &self,
-        method: Method,
-        path: &str,
-        body: Value,
-    ) -> Response<Body> {
+    pub async fn request_json(&self, method: Method, path: &str, body: Value) -> Response<Body> {
         let request = Request::builder()
             .method(method)
             .uri(path)
@@ -179,7 +177,11 @@ impl TestApp {
         path: &str,
         expected_status: StatusCode,
     ) -> T {
-        self.get(path).await.assert_status(expected_status).json().await
+        self.get(path)
+            .await
+            .assert_status(expected_status)
+            .json()
+            .await
     }
 
     pub async fn post_typed<B: Serialize, T: DeserializeOwned>(
@@ -239,7 +241,11 @@ impl TestApp {
         path: &str,
         expected_status: StatusCode,
     ) -> T {
-        self.delete(path).await.assert_status(expected_status).json().await
+        self.delete(path)
+            .await
+            .assert_status(expected_status)
+            .json()
+            .await
     }
 
     pub async fn create_user(&self, username: &str) -> i64 {
@@ -381,10 +387,12 @@ impl TemporaryDatabase {
             .await
             .expect("failed to connect to root test database");
 
-        sqlx::query(AssertSqlSafe(format!(r#"CREATE DATABASE "{database_name}""#)))
-            .execute(&root_pool)
-            .await
-            .expect("failed to create temporary test database");
+        sqlx::query(AssertSqlSafe(format!(
+            r#"CREATE DATABASE "{database_name}""#
+        )))
+        .execute(&root_pool)
+        .await
+        .expect("failed to create temporary test database");
         root_pool.close().await;
 
         let mut database_url = Url::parse(&root_database_url).expect("DATABASE_URL is invalid");
@@ -431,9 +439,9 @@ impl TemporaryDatabase {
             r#"DROP DATABASE IF EXISTS "{}""#,
             self.database_name
         )))
-            .execute(&root_pool)
-            .await
-            .expect("failed to drop temporary test database");
+        .execute(&root_pool)
+        .await
+        .expect("failed to drop temporary test database");
         root_pool.close().await;
     }
 }

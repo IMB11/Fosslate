@@ -33,7 +33,12 @@ pub async fn set_vote(
         state
             .services
             .votes
-            .set_vote(project_public_id, translation_id, request.user_id, request.vote)
+            .set_vote(
+                project_public_id,
+                translation_id,
+                request.user_id,
+                request.vote,
+            )
             .await?,
     ))
 }

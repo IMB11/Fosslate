@@ -1,3 +1,5 @@
+use sqlx::{Postgres, Transaction};
+
 use crate::models::{Language, ProjectTargetLanguage};
 
 use super::PostgresAdapter;
@@ -28,8 +30,9 @@ impl From<ProjectTargetLanguageRow> for ProjectTargetLanguage {
 }
 
 impl PostgresAdapter {
-    pub async fn add_target_language(
+    pub async fn add_target_language_in_tx(
         &self,
+        tx: &mut Transaction<'_, Postgres>,
         project_id: i64,
         language: &Language,
     ) -> Result<ProjectTargetLanguage, sqlx::Error> {
@@ -43,7 +46,7 @@ impl PostgresAdapter {
         .bind(project_id)
         .bind(&language.key)
         .bind(&language.name)
-        .fetch_one(self.pool())
+        .fetch_one(&mut **tx)
         .await?;
 
         Ok(row.into())

@@ -32,7 +32,11 @@ pub async fn approve_translation(
         state
             .services
             .approvals
-            .approve_translation(project_public_id, translation_id, request.approved_by_user_id)
+            .approve_translation(
+                project_public_id,
+                translation_id,
+                request.approved_by_user_id,
+            )
             .await?,
     ))
 }

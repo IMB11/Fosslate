@@ -2,7 +2,7 @@ mod common;
 
 use axum::http::StatusCode;
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use uuid::Uuid;
 
 #[derive(Debug, Deserialize)]
@@ -132,7 +132,10 @@ async fn namespaces_follow_project_scope_and_soft_delete_rules() {
     assert_eq!(same_name_other_project.project_id, other_project.id);
 
     let namespaces: Vec<ApiNamespace> = app
-        .get(&format!("/api/v1/projects/{}/namespaces", project.public_id))
+        .get(&format!(
+            "/api/v1/projects/{}/namespaces",
+            project.public_id
+        ))
         .await
         .assert_status(StatusCode::OK)
         .json()
@@ -243,12 +246,22 @@ async fn source_strings_follow_namespace_scope_keyset_pagination_and_stats() {
         .await;
     assert_eq!(duplicate.status(), StatusCode::CONFLICT);
 
-    let same_identifier_different_namespace =
-        create_source_string(&app, project.public_id, other_namespace.id, "hello", "Hello").await;
-    assert_eq!(same_identifier_different_namespace.namespace_id, other_namespace.id);
+    let same_identifier_different_namespace = create_source_string(
+        &app,
+        project.public_id,
+        other_namespace.id,
+        "hello",
+        "Hello",
+    )
+    .await;
+    assert_eq!(
+        same_identifier_different_namespace.namespace_id,
+        other_namespace.id
+    );
 
     let bye = create_source_string(&app, project.public_id, namespace.id, "bye", "Bye").await;
-    let thanks = create_source_string(&app, project.public_id, namespace.id, "thanks", "Thanks").await;
+    let thanks =
+        create_source_string(&app, project.public_id, namespace.id, "thanks", "Thanks").await;
 
     let first_page: Vec<ApiSourceString> = app
         .get(&format!(
@@ -357,9 +370,14 @@ async fn source_strings_follow_namespace_scope_keyset_pagination_and_stats() {
     )
     .await;
 
-    let recreated =
-        create_source_string(&app, project.public_id, namespace.id, "hello.title", "Hello again")
-            .await;
+    let recreated = create_source_string(
+        &app,
+        project.public_id,
+        namespace.id,
+        "hello.title",
+        "Hello again",
+    )
+    .await;
     assert_ne!(recreated.id, updated.id);
     assert_eq!(recreated.identifier, "hello.title");
 

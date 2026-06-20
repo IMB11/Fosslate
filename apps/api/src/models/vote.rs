@@ -33,7 +33,10 @@ mod tests {
     fn vote_delta_handles_new_and_replaced_votes() {
         assert_eq!(vote_delta(VoteValue::new(1).unwrap(), None), 1);
         assert_eq!(
-            vote_delta(VoteValue::new(1).unwrap(), Some(VoteValue::new(-1).unwrap())),
+            vote_delta(
+                VoteValue::new(1).unwrap(),
+                Some(VoteValue::new(-1).unwrap())
+            ),
             2
         );
     }

@@ -21,7 +21,17 @@ impl NamespaceService {
             .postgres
             .get_project_by_public_id(project_public_id)
             .await?;
-        Ok(self.postgres.create_namespace(project.id, &name).await?)
+        let mut tx = self.postgres.begin().await?;
+        let namespace = self
+            .postgres
+            .create_namespace_in_tx(&mut tx, project.id, &name)
+            .await?;
+        self.postgres
+            .refresh_all_namespace_language_stats_in_tx(&mut tx, namespace.id)
+            .await?;
+        tx.commit().await?;
+
+        Ok(namespace)
     }
 
     pub async fn list_namespaces(&self, project_public_id: Uuid) -> AppResult<Vec<Namespace>> {

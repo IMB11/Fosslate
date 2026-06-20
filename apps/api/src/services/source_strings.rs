@@ -67,7 +67,10 @@ impl SourceStringService {
             .postgres
             .get_project_by_public_id(project_public_id)
             .await?;
-        Ok(self.postgres.get_source_string(project.id, string_id).await?)
+        Ok(self
+            .postgres
+            .get_source_string(project.id, string_id)
+            .await?)
     }
 
     pub async fn update_source_string(

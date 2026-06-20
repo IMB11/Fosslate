@@ -1,10 +1,6 @@
 use uuid::Uuid;
 
-use crate::{
-    adapters::postgres::PostgresAdapter,
-    error::AppResult,
-    models::Translation,
-};
+use crate::{adapters::postgres::PostgresAdapter, error::AppResult, models::Translation};
 
 #[derive(Clone)]
 pub struct TranslationService {
@@ -28,19 +24,35 @@ impl TranslationService {
             .postgres
             .get_project_by_public_id(project_public_id)
             .await?;
-        self.postgres.get_source_string(project.id, string_id).await?;
+        self.postgres
+            .get_source_string(project.id, string_id)
+            .await?;
         let mut tx = self.postgres.begin().await?;
         let translation = self
             .postgres
-            .create_translation_in_tx(&mut tx, string_id, target_language_id, author_user_id, &value)
+            .create_translation_in_tx(
+                &mut tx,
+                string_id,
+                target_language_id,
+                author_user_id,
+                &value,
+            )
             .await?;
         let best = self
             .postgres
-            .find_best_translation_in_tx(&mut tx, translation.string_id, translation.target_language_id)
+            .find_best_translation_in_tx(
+                &mut tx,
+                translation.string_id,
+                translation.target_language_id,
+            )
             .await?;
         let approval = self
             .postgres
-            .get_translation_approval_in_tx(&mut tx, translation.string_id, translation.target_language_id)
+            .get_translation_approval_in_tx(
+                &mut tx,
+                translation.string_id,
+                translation.target_language_id,
+            )
             .await?;
         self.postgres
             .upsert_current_translation_in_tx(
@@ -75,7 +87,9 @@ impl TranslationService {
             .postgres
             .get_project_by_public_id(project_public_id)
             .await?;
-        self.postgres.get_source_string(project.id, string_id).await?;
+        self.postgres
+            .get_source_string(project.id, string_id)
+            .await?;
         Ok(self
             .postgres
             .list_translations(string_id, target_language_id)
@@ -98,7 +112,11 @@ impl TranslationService {
             .await?;
         let approval = self
             .postgres
-            .get_translation_approval_in_tx(&mut tx, translation.string_id, translation.target_language_id)
+            .get_translation_approval_in_tx(
+                &mut tx,
+                translation.string_id,
+                translation.target_language_id,
+            )
             .await?;
         let approved_translation_id = if approval
             .as_ref()
@@ -117,7 +135,11 @@ impl TranslationService {
         };
         let best = self
             .postgres
-            .find_best_translation_in_tx(&mut tx, translation.string_id, translation.target_language_id)
+            .find_best_translation_in_tx(
+                &mut tx,
+                translation.string_id,
+                translation.target_language_id,
+            )
             .await?;
         self.postgres
             .upsert_current_translation_in_tx(

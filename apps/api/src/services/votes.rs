@@ -50,11 +50,19 @@ impl VoteService {
             .await?;
         let best = self
             .postgres
-            .find_best_translation_in_tx(&mut tx, translation.string_id, translation.target_language_id)
+            .find_best_translation_in_tx(
+                &mut tx,
+                translation.string_id,
+                translation.target_language_id,
+            )
             .await?;
         let approval = self
             .postgres
-            .get_translation_approval_in_tx(&mut tx, translation.string_id, translation.target_language_id)
+            .get_translation_approval_in_tx(
+                &mut tx,
+                translation.string_id,
+                translation.target_language_id,
+            )
             .await?;
         self.postgres
             .upsert_current_translation_in_tx(

@@ -16,8 +16,8 @@ impl Config {
     pub fn from_env() -> Result<Self, ConfigError> {
         dotenvy::dotenv().ok();
 
-        let database_url = env::var("DATABASE_URL")
-            .map_err(|_| ConfigError::MissingEnv("DATABASE_URL"))?;
+        let database_url =
+            env::var("DATABASE_URL").map_err(|_| ConfigError::MissingEnv("DATABASE_URL"))?;
         let api_host = env::var("API_HOST")
             .unwrap_or_else(|_| "127.0.0.1".to_owned())
             .parse()
@@ -53,4 +53,3 @@ pub enum ConfigError {
     #[error("API_PORT is not a valid port")]
     InvalidPort(ParseIntError),
 }
-

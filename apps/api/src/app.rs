@@ -1,6 +1,6 @@
 use axum::{
-    http::{header, HeaderValue, Method},
     Router,
+    http::{HeaderValue, Method, header},
 };
 use sqlx::PgPool;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};

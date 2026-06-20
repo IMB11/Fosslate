@@ -15,7 +15,14 @@ impl PostgresAdapter {
         sqlx::query_as::<_, SourceString>(
             r#"
             INSERT INTO source_strings (project_id, namespace_id, identifier, value)
-            VALUES ($1, $2, $3, $4)
+            SELECT namespaces.project_id, namespaces.id, $3, $4
+            FROM namespaces
+            JOIN projects
+              ON projects.id = namespaces.project_id
+             AND projects.deleted_at IS NULL
+            WHERE namespaces.project_id = $1
+              AND namespaces.id = $2
+              AND namespaces.deleted_at IS NULL
             RETURNING id, project_id, namespace_id, identifier, value, created_at, updated_at
             "#,
         )
@@ -57,11 +64,25 @@ impl PostgresAdapter {
     ) -> Result<SourceString, sqlx::Error> {
         sqlx::query_as::<_, SourceString>(
             r#"
-            SELECT id, project_id, namespace_id, identifier, value, created_at, updated_at
+            SELECT
+                source_strings.id,
+                source_strings.project_id,
+                source_strings.namespace_id,
+                source_strings.identifier,
+                source_strings.value,
+                source_strings.created_at,
+                source_strings.updated_at
             FROM source_strings
-            WHERE project_id = $1
-              AND id = $2
-              AND deleted_at IS NULL
+            JOIN projects
+              ON projects.id = source_strings.project_id
+             AND projects.deleted_at IS NULL
+            JOIN namespaces
+              ON namespaces.id = source_strings.namespace_id
+             AND namespaces.project_id = source_strings.project_id
+             AND namespaces.deleted_at IS NULL
+            WHERE source_strings.project_id = $1
+              AND source_strings.id = $2
+              AND source_strings.deleted_at IS NULL
             "#,
         )
         .bind(project_id)
@@ -81,10 +102,23 @@ impl PostgresAdapter {
             r#"
             UPDATE source_strings
             SET identifier = $3, value = $4
-            WHERE project_id = $1
-              AND id = $2
-              AND deleted_at IS NULL
-            RETURNING id, project_id, namespace_id, identifier, value, created_at, updated_at
+            FROM projects, namespaces
+            WHERE source_strings.project_id = $1
+              AND source_strings.id = $2
+              AND source_strings.deleted_at IS NULL
+              AND projects.id = source_strings.project_id
+              AND projects.deleted_at IS NULL
+              AND namespaces.id = source_strings.namespace_id
+              AND namespaces.project_id = source_strings.project_id
+              AND namespaces.deleted_at IS NULL
+            RETURNING
+                source_strings.id,
+                source_strings.project_id,
+                source_strings.namespace_id,
+                source_strings.identifier,
+                source_strings.value,
+                source_strings.created_at,
+                source_strings.updated_at
             "#,
         )
         .bind(project_id)
@@ -105,10 +139,23 @@ impl PostgresAdapter {
             r#"
             UPDATE source_strings
             SET deleted_at = now()
-            WHERE project_id = $1
-              AND id = $2
-              AND deleted_at IS NULL
-            RETURNING id, project_id, namespace_id, identifier, value, created_at, updated_at
+            FROM projects, namespaces
+            WHERE source_strings.project_id = $1
+              AND source_strings.id = $2
+              AND source_strings.deleted_at IS NULL
+              AND projects.id = source_strings.project_id
+              AND projects.deleted_at IS NULL
+              AND namespaces.id = source_strings.namespace_id
+              AND namespaces.project_id = source_strings.project_id
+              AND namespaces.deleted_at IS NULL
+            RETURNING
+                source_strings.id,
+                source_strings.project_id,
+                source_strings.namespace_id,
+                source_strings.identifier,
+                source_strings.value,
+                source_strings.created_at,
+                source_strings.updated_at
             "#,
         )
         .bind(project_id)

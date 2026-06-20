@@ -43,7 +43,12 @@ pub async fn create_source_string(
     let source_string = state
         .services
         .source_strings
-        .create_source_string(project_public_id, namespace_id, request.identifier, request.value)
+        .create_source_string(
+            project_public_id,
+            namespace_id,
+            request.identifier,
+            request.value,
+        )
         .await?;
     Ok((StatusCode::CREATED, Json(source_string)))
 }
@@ -120,7 +125,12 @@ pub async fn update_source_string(
         state
             .services
             .source_strings
-            .update_source_string(project_public_id, string_id, request.identifier, request.value)
+            .update_source_string(
+                project_public_id,
+                string_id,
+                request.identifier,
+                request.value,
+            )
             .await?,
     ))
 }
