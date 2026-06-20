@@ -1,6 +1,9 @@
 # Fosslate
 
-Fosslate is a self-hosted localisation platform. This repository is a minimal Turborepo monorepo with a Next.js frontend and a Rust Axum API backed by Postgres.
+> [!WARNING]  
+> Still a WIP! Not ready for use
+
+Fosslate is a self-hosted localisation platform aimed as a free alternative to Crowdin.
 
 ## Stack
 
