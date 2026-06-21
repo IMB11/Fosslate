@@ -24,6 +24,7 @@ use crate::app::AppState;
         crate::routes::projects::get_project,
         crate::routes::projects::list_projects,
         crate::routes::projects::update_project,
+        crate::routes::stats::list_namespace_language_stats,
         crate::routes::strings::create_source_string,
         crate::routes::strings::delete_source_string,
         crate::routes::strings::get_source_string,
@@ -43,6 +44,7 @@ use crate::app::AppState;
             crate::models::CurrentTranslation,
             crate::models::Language,
             crate::models::Namespace,
+            crate::models::NamespaceLanguageStats,
             crate::models::Project,
             crate::models::ProjectTargetLanguage,
             crate::models::SourceString,
@@ -69,6 +71,7 @@ use crate::app::AppState;
         (name = "meta", description = "Application metadata and dependency status endpoints."),
         (name = "namespaces", description = "Group source strings within a project."),
         (name = "projects", description = "Create, read, update, and soft-delete translation projects."),
+        (name = "stats", description = "Read project and namespace translation coverage stats."),
         (name = "strings", description = "Manage source-language strings within namespaces."),
         (name = "translations", description = "Create, list, and soft-delete candidate translations."),
         (name = "users", description = "Temporary users used as authors, voters, and reviewers."),
@@ -82,12 +85,16 @@ use crate::app::AppState;
 )]
 struct ApiDoc;
 
+pub fn document() -> utoipa::openapi::OpenApi {
+    ApiDoc::openapi()
+}
+
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/openapi.json", get(openapi_json))
-        .merge(Scalar::with_url("/docs", ApiDoc::openapi()))
+        .merge(Scalar::with_url("/docs", document()))
 }
 
 async fn openapi_json() -> Json<utoipa::openapi::OpenApi> {
-    Json(ApiDoc::openapi())
+    Json(document())
 }

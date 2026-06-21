@@ -8,6 +8,7 @@ pub mod languages;
 pub mod meta;
 pub mod namespaces;
 pub mod projects;
+pub mod stats;
 pub mod strings;
 pub mod translations;
 pub mod users;
@@ -53,6 +54,10 @@ pub fn router() -> Router<AppState> {
         .route(
             "/api/v1/projects/{project_public_id}/namespaces/{namespace_id}/strings",
             get(strings::list_source_strings).post(strings::create_source_string),
+        )
+        .route(
+            "/api/v1/projects/{project_public_id}/stats/namespaces",
+            get(stats::list_namespace_language_stats),
         )
         .route(
             "/api/v1/projects/{project_public_id}/strings/{string_id}",

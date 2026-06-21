@@ -5,6 +5,40 @@ use crate::models::NamespaceLanguageStats;
 use super::PostgresAdapter;
 
 impl PostgresAdapter {
+    pub async fn list_namespace_language_stats(
+        &self,
+        project_id: i64,
+    ) -> Result<Vec<NamespaceLanguageStats>, sqlx::Error> {
+        sqlx::query_as::<_, NamespaceLanguageStats>(
+            r#"
+            SELECT
+                namespace_language_stats.project_id,
+                namespace_language_stats.namespace_id,
+                namespace_language_stats.target_language_id,
+                namespace_language_stats.string_count,
+                namespace_language_stats.translated_count,
+                namespace_language_stats.approved_count,
+                namespace_language_stats.candidate_count,
+                namespace_language_stats.missing_count,
+                namespace_language_stats.updated_at
+            FROM namespace_language_stats
+            JOIN namespaces
+              ON namespaces.id = namespace_language_stats.namespace_id
+             AND namespaces.project_id = namespace_language_stats.project_id
+             AND namespaces.deleted_at IS NULL
+            JOIN project_target_languages
+              ON project_target_languages.id = namespace_language_stats.target_language_id
+             AND project_target_languages.project_id = namespace_language_stats.project_id
+             AND project_target_languages.deleted_at IS NULL
+            WHERE namespace_language_stats.project_id = $1
+            ORDER BY namespace_language_stats.namespace_id, namespace_language_stats.target_language_id
+            "#,
+        )
+        .bind(project_id)
+        .fetch_all(self.pool())
+        .await
+    }
+
     #[allow(dead_code)]
     pub async fn rebuild_namespace_language_stats_in_tx(
         &self,

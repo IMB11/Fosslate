@@ -2,12 +2,14 @@
 name = "fosslate-api"
 version = "0.1.0"
 edition = "2024"
+default-run="fosslate-api"
 
 [dependencies]
 axum = "0.8"
 chrono = { version = "0.4", features = ["serde"] }
 dotenvy = "0.15"
 serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 sqlx = { version = "0.9", features = ["runtime-tokio", "tls-rustls-ring-webpki", "postgres", "migrate", "uuid", "chrono", "macros"] }
 thiserror = "2"
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "signal"] }
@@ -19,6 +21,5 @@ utoipa-scalar = { version = "0.3", features = ["axum"] }
 uuid = { version = "1", features = ["serde", "v4"] }
 
 [dev-dependencies]
-serde_json = "1"
 tower = "0.5"
 url = "2"
