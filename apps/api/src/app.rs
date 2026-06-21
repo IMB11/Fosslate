@@ -5,7 +5,7 @@ use axum::{
 use sqlx::PgPool;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 
-use crate::{config::Config, routes, services::Services};
+use crate::{adapters::resend::EmailDeliveryClient, config::Config, routes, services::Services};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -16,9 +16,31 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn new(db: PgPool) -> Self {
+    pub fn new(db: PgPool, config: &Config, setup_secret: String, secrets_key: String) -> Self {
+        Self::with_email_delivery(
+            db,
+            config,
+            setup_secret,
+            secrets_key,
+            EmailDeliveryClient::resend(config.resend_api_url.clone()),
+        )
+    }
+
+    pub fn with_email_delivery(
+        db: PgPool,
+        config: &Config,
+        setup_secret: String,
+        secrets_key: String,
+        email_delivery: EmailDeliveryClient,
+    ) -> Self {
         Self {
-            services: Services::new(db.clone()),
+            services: Services::with_setup(
+                db.clone(),
+                setup_secret,
+                config.public_app_url.clone(),
+                secrets_key,
+                email_delivery,
+            ),
             db,
             app_name: "Fosslate",
             version: env!("CARGO_PKG_VERSION"),
@@ -38,7 +60,7 @@ pub fn build(state: AppState, config: &Config) -> Router {
                 CorsLayer::new()
                     .allow_origin(origin)
                     .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE])
-                    .allow_headers([header::CONTENT_TYPE]),
+                    .allow_headers([header::CONTENT_TYPE, header::AUTHORIZATION]),
             ),
             Err(error) => {
                 tracing::warn!(%error, origin, "ignoring invalid CORS_ALLOWED_ORIGIN");

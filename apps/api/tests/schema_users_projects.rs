@@ -21,6 +21,9 @@ async fn migrations_create_core_schema_tables() {
         "translation_approvals",
         "current_translations",
         "namespace_language_stats",
+        "instance_setup",
+        "auth_provider_configs",
+        "email_delivery_config",
     ];
 
     for table in tables {

@@ -9,6 +9,8 @@ services:
       API_HOST: 127.0.0.1
       API_PORT: "4000"
       INTERNAL_API_URL: http://127.0.0.1:4000
+      PUBLIC_APP_URL: http://localhost:3000
+      RESEND_API_URL: https://api.resend.com/emails
     ports:
       - "3000:3000"
     depends_on:

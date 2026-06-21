@@ -2,6 +2,7 @@ mod common;
 
 use axum::http::StatusCode;
 use fosslate_api::{
+    adapters::resend::EmailDeliveryClient,
     jobs::{rebuild_projections, rebuild_stats},
     services::Services,
 };
@@ -275,7 +276,7 @@ async fn rebuild_current_translations_preserves_zero_candidate_rows() {
 
     assert_current_candidate_count(&app, string_id, fixture.target_language_id, 0).await;
 
-    let services = Services::new(app.pool().clone());
+    let services = services_for_test(app.pool().clone());
     rebuild_projections::rebuild_current_translations(&services)
         .await
         .unwrap();
@@ -347,7 +348,7 @@ async fn rebuild_jobs_are_idempotent_and_repair_stale_projection_rows() {
     .await
     .unwrap();
 
-    let services = Services::new(app.pool().clone());
+    let services = services_for_test(app.pool().clone());
     rebuild_projections::rebuild_current_translations(&services)
         .await
         .unwrap();
@@ -412,6 +413,7 @@ async fn openapi_json_contains_route_groups_and_core_paths() {
         "meta",
         "namespaces",
         "projects",
+        "setup",
         "strings",
         "translations",
         "users",
@@ -426,6 +428,12 @@ async fn openapi_json_contains_route_groups_and_core_paths() {
     let paths = document["paths"].as_object().unwrap();
     for path in [
         "/api/v1/users",
+        "/api/v1/setup/verify",
+        "/api/v1/setup/status",
+        "/api/v1/setup/sso/github",
+        "/api/v1/setup/sso/gitlab",
+        "/api/v1/setup/email/test",
+        "/api/v1/setup/complete",
         "/api/v1/projects",
         "/api/v1/projects/{project_public_id}/languages",
         "/api/v1/projects/{project_public_id}/namespaces",
@@ -477,6 +485,16 @@ async fn openapi_json_contains_route_groups_and_core_paths() {
     }
 
     app.cleanup().await;
+}
+
+fn services_for_test(pool: sqlx::PgPool) -> Services {
+    Services::with_setup(
+        pool,
+        "test-setup-secret".to_owned(),
+        "http://localhost:3000".to_owned(),
+        "test-secrets-key".to_owned(),
+        EmailDeliveryClient::static_success("test-message-id"),
+    )
 }
 
 async fn create_fixture(app: &common::TestApp) -> Fixture {

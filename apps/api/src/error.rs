@@ -11,10 +11,16 @@ pub type AppResult<T> = Result<T, AppError>;
 pub enum AppError {
     #[error("database request failed")]
     Database(#[from] sqlx::Error),
+    #[error("unauthorized")]
+    Unauthorized,
+    #[error("{0}")]
+    Conflict(&'static str),
     #[error("{0} not found")]
     NotFound(&'static str),
     #[error("{0}")]
     BadRequest(&'static str),
+    #[error("{0}")]
+    ExternalService(&'static str),
 }
 
 #[derive(Serialize, utoipa::ToSchema)]
@@ -41,8 +47,11 @@ impl IntoResponse for AppError {
                 (StatusCode::NOT_FOUND, "not_found")
             }
             Self::Database(_) => (StatusCode::INTERNAL_SERVER_ERROR, "internal_server_error"),
+            Self::Unauthorized => (StatusCode::UNAUTHORIZED, "unauthorized"),
+            Self::Conflict(error) => (StatusCode::CONFLICT, error),
             Self::NotFound(_) => (StatusCode::NOT_FOUND, "not_found"),
             Self::BadRequest(_) => (StatusCode::BAD_REQUEST, "bad_request"),
+            Self::ExternalService(error) => (StatusCode::BAD_GATEWAY, error),
         };
 
         (status, Json(ErrorBody { error })).into_response()

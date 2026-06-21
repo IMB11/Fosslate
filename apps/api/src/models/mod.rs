@@ -4,6 +4,7 @@ pub mod language;
 pub mod namespace;
 pub mod pagination;
 pub mod project;
+pub mod setup;
 pub mod source_string;
 pub mod stats;
 pub mod translation;
@@ -16,6 +17,10 @@ pub use language::Language;
 pub use namespace::Namespace;
 pub use pagination::KeysetPage;
 pub use project::{Project, ProjectTargetLanguage};
+pub use setup::{
+    AuthProviderSetupStatus, EmailDeliverySetupStatus, SetupCompleteResponse, SetupStatus,
+    SetupStep,
+};
 pub use source_string::SourceString;
 pub use stats::NamespaceLanguageStats;
 pub use translation::Translation;

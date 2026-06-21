@@ -5,6 +5,7 @@ pub mod current_translations;
 pub mod languages;
 pub mod namespaces;
 pub mod projects;
+pub mod setup;
 pub mod source_strings;
 pub mod stats;
 pub mod translations;

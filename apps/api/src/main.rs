@@ -9,10 +9,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::from_env()?;
     let pool = db::connect(&config.database_url).await?;
     db::run_migrations(&pool).await?;
+    let setup_bootstrap = setup_bootstrap(&pool).await?;
 
     let addr = config.socket_addr();
     let listener = TcpListener::bind(addr).await?;
-    let app = app::build(AppState::new(pool), &config);
+    let app = app::build(
+        AppState::new(
+            pool,
+            &config,
+            setup_bootstrap.setup_secret,
+            setup_bootstrap.secrets_key,
+        ),
+        &config,
+    );
 
     tracing::info!(%addr, "starting fosslate api");
 
@@ -21,6 +30,49 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
 
     Ok(())
+}
+
+struct SetupBootstrap {
+    setup_secret: String,
+    secrets_key: String,
+}
+
+async fn setup_bootstrap(
+    pool: &sqlx::PgPool,
+) -> Result<SetupBootstrap, Box<dyn std::error::Error>> {
+    let setup_completed = sqlx::query_scalar::<_, Option<chrono::DateTime<chrono::Utc>>>(
+        r#"
+        SELECT completed_at
+        FROM instance_setup
+        WHERE id = 1
+        "#,
+    )
+    .fetch_one(pool)
+    .await?
+    .is_some();
+
+    let secrets_key = sqlx::query_scalar::<_, String>(
+        r#"
+        SELECT secrets_key
+        FROM instance_setup
+        WHERE id = 1
+        "#,
+    )
+    .fetch_one(pool)
+    .await?;
+
+    let setup_secret = format!("fs_setup_{}", uuid::Uuid::new_v4());
+    if !setup_completed {
+        tracing::warn!(
+            setup_secret = %setup_secret,
+            "first-run setup is incomplete; generated setup code"
+        );
+    }
+
+    Ok(SetupBootstrap {
+        setup_secret,
+        secrets_key,
+    })
 }
 
 fn init_tracing() {

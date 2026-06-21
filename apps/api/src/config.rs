@@ -10,6 +10,8 @@ pub struct Config {
     pub api_host: IpAddr,
     pub api_port: u16,
     pub cors_allowed_origin: Option<String>,
+    pub public_app_url: String,
+    pub resend_api_url: String,
 }
 
 impl Config {
@@ -30,12 +32,26 @@ impl Config {
             .ok()
             .map(|value| value.trim().to_owned())
             .filter(|value| !value.is_empty());
+        let public_app_url = env::var("PUBLIC_APP_URL")
+            .unwrap_or_else(|_| "http://localhost:3000".to_owned())
+            .trim()
+            .trim_end_matches('/')
+            .to_owned();
+        let resend_api_url = env::var("RESEND_API_URL")
+            .unwrap_or_else(|_| "https://api.resend.com/emails".to_owned())
+            .trim()
+            .to_owned();
+        if resend_api_url.is_empty() {
+            return Err(ConfigError::EmptyEnv("RESEND_API_URL"));
+        }
 
         Ok(Self {
             database_url,
             api_host,
             api_port,
             cors_allowed_origin,
+            public_app_url,
+            resend_api_url,
         })
     }
 
@@ -48,6 +64,8 @@ impl Config {
 pub enum ConfigError {
     #[error("missing required environment variable {0}")]
     MissingEnv(&'static str),
+    #[error("environment variable {0} cannot be empty")]
+    EmptyEnv(&'static str),
     #[error("API_HOST is not a valid IP address")]
     InvalidHost(std::net::AddrParseError),
     #[error("API_PORT is not a valid port")]

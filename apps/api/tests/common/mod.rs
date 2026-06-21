@@ -8,6 +8,7 @@ use axum::{
     http::{Method, Request, Response, StatusCode},
 };
 use fosslate_api::{
+    adapters::resend::EmailDeliveryClient,
     app::{self, AppState},
     config::Config,
     db,
@@ -32,6 +33,8 @@ pub struct TestResponse {
     response: Response<Body>,
 }
 
+pub const SETUP_SECRET: &str = "test-setup-secret";
+
 impl TestApi {
     pub async fn spawn() -> Self {
         Self {
@@ -53,6 +56,24 @@ impl TestApi {
         }
     }
 
+    pub async fn get_with_setup_secret(&self, path: &str) -> TestResponse {
+        TestResponse {
+            response: self
+                .inner
+                .request_empty_with_setup_secret(Method::GET, path)
+                .await,
+        }
+    }
+
+    pub async fn get_with_authorization(&self, path: &str, authorization: &str) -> TestResponse {
+        TestResponse {
+            response: self
+                .inner
+                .request_empty_with_authorization(Method::GET, path, authorization)
+                .await,
+        }
+    }
+
     pub async fn post_json(&self, path: &str, body: &Value) -> TestResponse {
         TestResponse {
             response: self
@@ -62,11 +83,29 @@ impl TestApi {
         }
     }
 
+    pub async fn post_json_with_setup_secret(&self, path: &str, body: &Value) -> TestResponse {
+        TestResponse {
+            response: self
+                .inner
+                .request_json_with_setup_secret(Method::POST, path, body.clone())
+                .await,
+        }
+    }
+
     pub async fn put_json(&self, path: &str, body: &Value) -> TestResponse {
         TestResponse {
             response: self
                 .inner
                 .request_json(Method::PUT, path, body.clone())
+                .await,
+        }
+    }
+
+    pub async fn put_json_with_setup_secret(&self, path: &str, body: &Value) -> TestResponse {
+        TestResponse {
+            response: self
+                .inner
+                .request_json_with_setup_secret(Method::PUT, path, body.clone())
                 .await,
         }
     }
@@ -110,8 +149,19 @@ impl TestApp {
             api_host: IpAddr::V4(Ipv4Addr::LOCALHOST),
             api_port: 0,
             cors_allowed_origin: None,
+            public_app_url: "http://localhost:3000".to_owned(),
+            resend_api_url: "https://api.resend.com/emails".to_owned(),
         };
-        let app = app::build(AppState::new(db.pool.clone()), &config);
+        let app = app::build(
+            AppState::with_email_delivery(
+                db.pool.clone(),
+                &config,
+                SETUP_SECRET.to_owned(),
+                "test-secrets-key".to_owned(),
+                EmailDeliveryClient::static_success("test-message-id"),
+            ),
+            &config,
+        );
         Self { db, app }
     }
 
@@ -134,6 +184,54 @@ impl TestApp {
         let request = Request::builder()
             .method(method)
             .uri(path)
+            .body(Body::empty())
+            .unwrap();
+
+        self.app.clone().oneshot(request).await.unwrap()
+    }
+
+    pub async fn request_json_with_setup_secret(
+        &self,
+        method: Method,
+        path: &str,
+        body: Value,
+    ) -> Response<Body> {
+        let request = Request::builder()
+            .method(method)
+            .uri(path)
+            .header("content-type", "application/json")
+            .header("authorization", format!("Bearer {SETUP_SECRET}"))
+            .body(Body::from(body.to_string()))
+            .unwrap();
+
+        self.app.clone().oneshot(request).await.unwrap()
+    }
+
+    pub async fn request_empty_with_setup_secret(
+        &self,
+        method: Method,
+        path: &str,
+    ) -> Response<Body> {
+        let request = Request::builder()
+            .method(method)
+            .uri(path)
+            .header("authorization", format!("Bearer {SETUP_SECRET}"))
+            .body(Body::empty())
+            .unwrap();
+
+        self.app.clone().oneshot(request).await.unwrap()
+    }
+
+    pub async fn request_empty_with_authorization(
+        &self,
+        method: Method,
+        path: &str,
+        authorization: &str,
+    ) -> Response<Body> {
+        let request = Request::builder()
+            .method(method)
+            .uri(path)
+            .header("authorization", authorization)
             .body(Body::empty())
             .unwrap();
 

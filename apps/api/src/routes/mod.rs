@@ -8,6 +8,7 @@ pub mod languages;
 pub mod meta;
 pub mod namespaces;
 pub mod projects;
+pub mod setup;
 pub mod stats;
 pub mod strings;
 pub mod translations;
@@ -18,6 +19,24 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/health", get(health::health))
         .route("/api/v1/meta", get(meta::meta))
+        .route("/api/v1/setup/verify", axum::routing::post(setup::verify_setup_secret))
+        .route("/api/v1/setup/status", get(setup::get_setup_status))
+        .route(
+            "/api/v1/setup/sso/github",
+            axum::routing::put(setup::save_github_sso_setup),
+        )
+        .route(
+            "/api/v1/setup/sso/gitlab",
+            axum::routing::put(setup::save_gitlab_sso_setup),
+        )
+        .route(
+            "/api/v1/setup/email/test",
+            axum::routing::post(setup::test_email_delivery_setup),
+        )
+        .route(
+            "/api/v1/setup/complete",
+            axum::routing::post(setup::complete_setup),
+        )
         .route(
             "/api/v1/users",
             get(users::list_users).post(users::create_user),
