@@ -7,18 +7,33 @@ import React, { ComponentPropsWithoutRef } from "react";
 const Menu = BaseMenu.Root;
 const Trigger = BaseMenu.Trigger;
 
-interface IMenuContent
-  extends ComponentPropsWithoutRef<typeof BaseMenu.Popup> {}
+interface IMenuContent extends ComponentPropsWithoutRef<typeof BaseMenu.Popup> {
+  align?: ComponentPropsWithoutRef<typeof BaseMenu.Positioner>["align"];
+  positionerClassName?: string;
+  side?: ComponentPropsWithoutRef<typeof BaseMenu.Positioner>["side"];
+  sideOffset?: ComponentPropsWithoutRef<typeof BaseMenu.Positioner>["sideOffset"];
+}
 
-const Content = ({ className, ...props }: IMenuContent) => (
+const Content = ({
+  align = "end",
+  className,
+  positionerClassName,
+  side = "bottom",
+  sideOffset = 8,
+  ...props
+}: IMenuContent) => (
   <BaseMenu.Portal>
-    <BaseMenu.Popup
-      className={cn(
-        "bg-white border-2 shadow-md absolute top-2 min-w-20",
-        className,
-      )}
-      {...props}
-    />
+    <BaseMenu.Positioner
+      align={align}
+      className={cn("z-50", positionerClassName)}
+      side={side}
+      sideOffset={sideOffset}
+    >
+      <BaseMenu.Popup
+        className={cn("bg-white border-2 shadow-md min-w-20", className)}
+        {...props}
+      />
+    </BaseMenu.Positioner>
   </BaseMenu.Portal>
 );
 

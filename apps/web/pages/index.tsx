@@ -21,7 +21,7 @@ export default function Home({
   backend,
 }: InferGetServerSidePropsType<typeof getServerSideProps>) {
   return (
-    <main className="min-h-screen bg-background p-6 text-foreground">
+    <main className="min-h-[calc(100vh-5rem)] bg-background p-6 text-foreground">
       <Card>
         <Card.Content className="space-y-3">
           <Text as="h1">Hello world</Text>

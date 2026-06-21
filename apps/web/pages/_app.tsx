@@ -1,8 +1,13 @@
-import type { AppProps } from "next/app";
+import NextApp, { type AppContext, type AppProps } from "next/app";
 import { Archivo_Black, Space_Grotesk } from "next/font/google";
 import Head from "next/head";
+import { useRouter } from "next/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
+
+import { Navbar } from "@/components/layout/Navbar";
+import type { AuthUser } from "@/lib/auth-client";
+import { getServerAuthSession } from "@/lib/auth-server";
 
 import "./globals.css";
 
@@ -20,7 +25,14 @@ const space = Space_Grotesk({
   display: "swap",
 });
 
-export default function App({ Component, pageProps }: AppProps) {
+type FosslatePageProps = {
+  initialAuthUser?: AuthUser | null;
+};
+
+type FosslateAppProps = AppProps<FosslatePageProps>;
+
+export default function App({ Component, pageProps }: FosslateAppProps) {
+  const router = useRouter();
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -35,6 +47,7 @@ export default function App({ Component, pageProps }: AppProps) {
         },
       }),
   );
+  const showNavbar = !standaloneRoute(router.pathname);
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -43,9 +56,46 @@ export default function App({ Component, pageProps }: AppProps) {
         <meta name="description" content="Self-hosted localisation platform" />
       </Head>
       <div className={`${archivoBlack.variable} ${space.variable}`}>
-        <Component {...pageProps} />
+        {showNavbar ? (
+          <div className="min-h-screen bg-background text-foreground">
+            <Navbar initialUser={pageProps.initialAuthUser} />
+            <Component {...pageProps} />
+          </div>
+        ) : (
+          <Component {...pageProps} />
+        )}
       </div>
     </QueryClientProvider>
   );
 }
 
+App.getInitialProps = async (appContext: AppContext) => {
+  const appProps = await NextApp.getInitialProps(appContext);
+
+  if (standaloneRoute(appContext.ctx.pathname)) {
+    return appProps;
+  }
+
+  const session = await getServerAuthSession(
+    appContext.ctx.req,
+    appContext.ctx.res,
+  );
+
+  return {
+    ...appProps,
+    pageProps: {
+      ...appProps.pageProps,
+      ...(session.resolved ? { initialAuthUser: session.user } : {}),
+    },
+  };
+};
+
+function standaloneRoute(pathname: string): boolean {
+  return [
+    "/admin/setup",
+    "/forgot-password",
+    "/login",
+    "/reset-password",
+    "/signup",
+  ].includes(pathname);
+}
