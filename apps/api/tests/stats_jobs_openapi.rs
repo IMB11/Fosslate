@@ -415,6 +415,7 @@ async fn openapi_json_contains_route_groups_and_core_paths() {
         "namespaces",
         "projects",
         "setup",
+        "settings",
         "strings",
         "translations",
         "users",
@@ -447,6 +448,10 @@ async fn openapi_json_contains_route_groups_and_core_paths() {
         "/api/v1/setup/sso/gitlab",
         "/api/v1/setup/email/test",
         "/api/v1/setup/complete",
+        "/api/v1/settings/instance/admin/claim",
+        "/api/v1/settings/instance",
+        "/api/v1/settings/instance/sso/{provider}",
+        "/api/v1/settings/instance/email/test",
         "/api/v1/projects",
         "/api/v1/projects/{project_public_id}/languages",
         "/api/v1/projects/{project_public_id}/namespaces",
@@ -519,6 +524,7 @@ async fn create_fixture(app: &common::TestApp) -> Fixture {
         .add_language(&project.public_id, "fr-FR", "French")
         .await;
     let namespace_id = app.create_namespace(&project.public_id, "common").await;
+    grant_proofreader(app, project.id, target_language_id, approver_user_id).await;
 
     Fixture {
         project_public_id: project.public_id,
@@ -539,6 +545,31 @@ async fn approve_translation(app: &common::TestApp, fixture: &Fixture, translati
     )
     .await
     .assert_status(StatusCode::OK);
+}
+
+async fn grant_proofreader(
+    app: &common::TestApp,
+    project_id: i64,
+    target_language_id: i64,
+    user_id: i64,
+) {
+    sqlx::query(
+        r#"
+        INSERT INTO project_language_proofreaders (
+            project_id,
+            target_language_id,
+            user_id
+        )
+        VALUES ($1, $2, $3)
+        ON CONFLICT DO NOTHING
+        "#,
+    )
+    .bind(project_id)
+    .bind(target_language_id)
+    .bind(user_id)
+    .execute(app.pool())
+    .await
+    .expect("proofreader grant should be inserted");
 }
 
 async fn assert_stats(app: &common::TestApp, fixture: &Fixture, expected: StatsRow) {

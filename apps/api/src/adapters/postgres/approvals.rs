@@ -5,6 +5,30 @@ use crate::models::TranslationApproval;
 use super::PostgresAdapter;
 
 impl PostgresAdapter {
+    pub async fn user_can_proofread_project_language(
+        &self,
+        user_id: i64,
+        project_id: i64,
+        target_language_id: i64,
+    ) -> Result<bool, sqlx::Error> {
+        sqlx::query_scalar::<_, bool>(
+            r#"
+            SELECT EXISTS (
+                SELECT 1
+                FROM project_language_proofreaders
+                WHERE user_id = $1
+                  AND project_id = $2
+                  AND target_language_id = $3
+            )
+            "#,
+        )
+        .bind(user_id)
+        .bind(project_id)
+        .bind(target_language_id)
+        .fetch_one(self.pool())
+        .await
+    }
+
     pub async fn upsert_translation_approval_in_tx(
         &self,
         tx: &mut Transaction<'_, Postgres>,

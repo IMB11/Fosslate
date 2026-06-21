@@ -20,11 +20,28 @@ impl ApprovalService {
         project_public_id: Uuid,
         translation_id: i64,
         approved_by_user_id: i64,
+        approver_is_admin: bool,
     ) -> AppResult<CurrentTranslation> {
         let project = self
             .postgres
             .get_project_by_public_id(project_public_id)
             .await?;
+        let translation = self.postgres.get_translation(translation_id).await?;
+        if translation.project_id != project.id {
+            return Err(AppError::NotFound("translation"));
+        }
+        if !approver_is_admin
+            && !self
+                .postgres
+                .user_can_proofread_project_language(
+                    approved_by_user_id,
+                    translation.project_id,
+                    translation.target_language_id,
+                )
+                .await?
+        {
+            return Err(AppError::Forbidden);
+        }
         let mut tx = self.postgres.begin().await?;
         let translation = self
             .postgres
@@ -79,6 +96,8 @@ impl ApprovalService {
         project_public_id: Uuid,
         string_id: i64,
         target_language_id: i64,
+        user_id: i64,
+        user_is_admin: bool,
     ) -> AppResult<CurrentTranslation> {
         let project = self
             .postgres
@@ -87,6 +106,14 @@ impl ApprovalService {
         self.postgres
             .get_source_string(project.id, string_id)
             .await?;
+        if !user_is_admin
+            && !self
+                .postgres
+                .user_can_proofread_project_language(user_id, project.id, target_language_id)
+                .await?
+        {
+            return Err(AppError::Forbidden);
+        }
         let mut tx = self.postgres.begin().await?;
         let approval = self
             .postgres

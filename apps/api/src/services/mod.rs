@@ -4,6 +4,8 @@ use crate::adapters::{postgres::PostgresAdapter, resend::EmailDeliveryClient};
 
 pub mod approvals;
 pub mod auth;
+pub mod instance_config;
+pub mod instance_settings;
 pub mod languages;
 pub mod maintenance;
 pub mod namespaces;
@@ -17,6 +19,7 @@ pub mod votes;
 
 pub use approvals::ApprovalService;
 pub use auth::AuthService;
+pub use instance_settings::InstanceSettingsService;
 pub use languages::LanguageService;
 pub use maintenance::MaintenanceService;
 pub use namespaces::NamespaceService;
@@ -40,6 +43,7 @@ pub struct Services {
     pub source_strings: SourceStringService,
     pub stats: StatsService,
     pub setup: SetupService,
+    pub instance_settings: InstanceSettingsService,
     pub translations: TranslationService,
     pub votes: VoteService,
     pub approvals: ApprovalService,
@@ -74,6 +78,13 @@ impl Services {
             source_strings: SourceStringService::new(postgres.clone()),
             stats: StatsService::new(postgres.clone()),
             setup: SetupService::new(
+                postgres.clone(),
+                email_delivery.clone(),
+                setup_secret.clone(),
+                public_app_url.clone(),
+                secrets_key.clone(),
+            ),
+            instance_settings: InstanceSettingsService::new(
                 postgres.clone(),
                 email_delivery,
                 setup_secret,

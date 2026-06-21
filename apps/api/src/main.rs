@@ -62,12 +62,11 @@ async fn setup_bootstrap(
     .await?;
 
     let setup_secret = format!("fs_setup_{}", uuid::Uuid::new_v4());
-    if !setup_completed {
-        tracing::warn!(
-            setup_secret = %setup_secret,
-            "first-run setup is incomplete; generated setup code"
-        );
-    }
+    tracing::warn!(
+        setup_secret = %setup_secret,
+        setup_completed,
+        "generated setup/admin code"
+    );
 
     Ok(SetupBootstrap {
         setup_secret,

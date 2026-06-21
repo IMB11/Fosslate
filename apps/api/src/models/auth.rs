@@ -1,11 +1,12 @@
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 
-#[derive(Debug, Clone, Serialize, sqlx::FromRow, utoipa::ToSchema)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct AuthUser {
     pub id: i64,
     pub email: String,
     pub username: String,
+    pub is_admin: bool,
     pub avatar_url: Option<String>,
     pub email_verified_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,

@@ -9,6 +9,7 @@ pub mod languages;
 pub mod meta;
 pub mod namespaces;
 pub mod projects;
+pub mod settings;
 pub mod setup;
 pub mod stats;
 pub mod strings;
@@ -70,6 +71,22 @@ pub fn router() -> Router<AppState> {
         .route(
             "/api/v1/setup/complete",
             axum::routing::post(setup::complete_setup),
+        )
+        .route(
+            "/api/v1/settings/instance/admin/claim",
+            axum::routing::post(settings::claim_instance_admin),
+        )
+        .route(
+            "/api/v1/settings/instance",
+            get(settings::get_instance_settings),
+        )
+        .route(
+            "/api/v1/settings/instance/sso/{provider}",
+            axum::routing::put(settings::save_instance_sso_provider),
+        )
+        .route(
+            "/api/v1/settings/instance/email/test",
+            axum::routing::post(settings::test_instance_email_delivery),
         )
         .route(
             "/api/v1/users",

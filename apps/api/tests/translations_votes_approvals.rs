@@ -508,6 +508,41 @@ async fn approvals_override_reapprove_remove_fallback_missing_and_wrong_project(
 }
 
 #[tokio::test]
+async fn approval_requires_scoped_proofreader_or_instance_admin() {
+    let app = common::TestApp::spawn().await;
+    let seed = seed_project(&app, "approval-permissions").await;
+    let outsider = create_user(&app, "approval-outsider").await;
+    let admin = create_user(&app, "approval-admin").await;
+    let first = create_translation(&app, &seed, "first").await;
+    let second = create_translation(&app, &seed, "second").await;
+
+    app.put_json_expect_status(
+        &format!(
+            "/api/v1/projects/{}/translations/{}/approval",
+            seed.project_public_id, first.id
+        ),
+        &ApproveTranslationBody {
+            approved_by_user_id: outsider.id,
+        },
+        StatusCode::FORBIDDEN,
+    )
+    .await;
+
+    grant_admin(&app, admin.id).await;
+    let approved = approve(&app, seed.project_public_id, second.id, admin.id).await;
+    assert_current_response(
+        &approved,
+        &seed,
+        Some(second.id),
+        Some(second.id),
+        Some(first.id),
+        2,
+    );
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
 async fn current_translations_are_sparse_until_first_candidate_and_track_candidate_count() {
     let app = common::TestApp::spawn().await;
     let seed = seed_project(&app, "sparse-current").await;
@@ -560,6 +595,10 @@ async fn seed_project(app: &common::TestApp, label: &str) -> Seed {
     assert_eq!(source_string.project_id, project.id);
     assert_eq!(source_string.namespace_id, namespace.id);
 
+    grant_proofreader(app, project.id, target_language.id, reviewer.id).await;
+    let default_auth_user_id = ensure_default_auth_user(app).await;
+    grant_proofreader(app, project.id, target_language.id, default_auth_user_id).await;
+
     Seed {
         user_id: user.id,
         reviewer_id: reviewer.id,
@@ -580,6 +619,60 @@ async fn create_user(app: &common::TestApp, username: &str) -> UserResponse {
         StatusCode::CREATED,
     )
     .await
+}
+
+async fn ensure_default_auth_user(app: &common::TestApp) -> i64 {
+    sqlx::query_scalar::<_, i64>(
+        r#"
+        INSERT INTO users (username, email, email_verified_at)
+        VALUES ('__test_auth_user', '__test_auth_user@example.test', now())
+        ON CONFLICT (username) DO UPDATE
+        SET email = EXCLUDED.email
+        RETURNING id
+        "#,
+    )
+    .fetch_one(app.pool())
+    .await
+    .expect("default auth user should be created")
+}
+
+async fn grant_proofreader(
+    app: &common::TestApp,
+    project_id: i64,
+    target_language_id: i64,
+    user_id: i64,
+) {
+    sqlx::query(
+        r#"
+        INSERT INTO project_language_proofreaders (
+            project_id,
+            target_language_id,
+            user_id
+        )
+        VALUES ($1, $2, $3)
+        ON CONFLICT DO NOTHING
+        "#,
+    )
+    .bind(project_id)
+    .bind(target_language_id)
+    .bind(user_id)
+    .execute(app.pool())
+    .await
+    .expect("proofreader grant should be inserted");
+}
+
+async fn grant_admin(app: &common::TestApp, user_id: i64) {
+    sqlx::query(
+        r#"
+        UPDATE users
+        SET is_admin = true
+        WHERE id = $1
+        "#,
+    )
+    .bind(user_id)
+    .execute(app.pool())
+    .await
+    .expect("admin grant should be inserted");
 }
 
 async fn create_project(app: &common::TestApp, name: &str) -> ProjectResponse {

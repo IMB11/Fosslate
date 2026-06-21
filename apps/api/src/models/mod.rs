@@ -1,6 +1,7 @@
 pub mod approval;
 pub mod auth;
 pub mod current_translation;
+pub mod instance_settings;
 pub mod language;
 pub mod namespace;
 pub mod pagination;
@@ -17,6 +18,7 @@ pub use auth::{
     AuthProvidersResponse, AuthUser, AuthUserResponse, SsoProviderAvailability, SsoProviders,
 };
 pub use current_translation::{CurrentTranslation, select_current_translation};
+pub use instance_settings::InstanceSettings;
 pub use language::Language;
 pub use namespace::Namespace;
 pub use pagination::KeysetPage;

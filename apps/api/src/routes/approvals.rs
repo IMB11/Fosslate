@@ -54,6 +54,7 @@ pub async fn approve_translation(
                 project_public_id,
                 translation_id,
                 request.approved_by_user_id,
+                current_user.is_admin,
             )
             .await?,
     ))
@@ -79,13 +80,20 @@ pub async fn approve_translation(
 )]
 pub async fn remove_approval(
     State(state): State<AppState>,
+    CurrentUser(current_user): CurrentUser,
     Path((project_public_id, string_id, target_language_id)): Path<(Uuid, i64, i64)>,
 ) -> AppResult<Json<CurrentTranslation>> {
     Ok(Json(
         state
             .services
             .approvals
-            .remove_approval(project_public_id, string_id, target_language_id)
+            .remove_approval(
+                project_public_id,
+                string_id,
+                target_language_id,
+                current_user.id,
+                current_user.is_admin,
+            )
             .await?,
     ))
 }

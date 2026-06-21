@@ -24,6 +24,19 @@ pub struct SessionUserRow {
     pub username: String,
     pub avatar_url: Option<String>,
     pub email_verified_at: Option<DateTime<Utc>>,
+    pub is_admin: bool,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct AuthUserRow {
+    pub id: i64,
+    pub email: String,
+    pub username: String,
+    pub avatar_url: Option<String>,
+    pub email_verified_at: Option<DateTime<Utc>>,
+    pub is_admin: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -97,6 +110,22 @@ impl From<SessionUserRow> for AuthUser {
             id: row.id,
             email: row.email,
             username: row.username,
+            is_admin: row.is_admin,
+            avatar_url: row.avatar_url,
+            email_verified_at: row.email_verified_at,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+        }
+    }
+}
+
+impl From<AuthUserRow> for AuthUser {
+    fn from(row: AuthUserRow) -> Self {
+        Self {
+            id: row.id,
+            email: row.email,
+            username: row.username,
+            is_admin: row.is_admin,
             avatar_url: row.avatar_url,
             email_verified_at: row.email_verified_at,
             created_at: row.created_at,
@@ -114,7 +143,7 @@ impl PostgresAdapter {
         email_verified: bool,
         avatar_url: Option<&str>,
     ) -> Result<AuthUser, sqlx::Error> {
-        sqlx::query_as::<_, AuthUser>(
+        let row = sqlx::query_as::<_, AuthUserRow>(
             r#"
             INSERT INTO users (
                 email,
@@ -130,6 +159,7 @@ impl PostgresAdapter {
                 username,
                 avatar_url,
                 email_verified_at,
+                is_admin,
                 created_at,
                 updated_at
             "#,
@@ -140,7 +170,9 @@ impl PostgresAdapter {
         .bind(email_verified)
         .bind(avatar_url)
         .fetch_one(self.pool())
-        .await
+        .await?;
+
+        Ok(row.into())
     }
 
     pub async fn create_signup_email_verification(
@@ -231,25 +263,42 @@ impl PostgresAdapter {
     }
 
     pub async fn auth_user_by_id(&self, user_id: i64) -> Result<AuthUser, sqlx::Error> {
-        sqlx::query_as::<_, AuthUser>(
+        let row = sqlx::query_as::<_, AuthUserRow>(
             r#"
             SELECT
-                id,
-                email::text AS email,
-                username,
-                avatar_url,
-                email_verified_at,
-                created_at,
-                updated_at
+                users.id,
+                users.email::text AS email,
+                users.username,
+                users.avatar_url,
+                users.email_verified_at,
+                users.is_admin,
+                users.created_at,
+                users.updated_at
             FROM users
-            WHERE id = $1
-              AND email IS NOT NULL
-              AND disabled_at IS NULL
+            WHERE users.id = $1
+              AND users.email IS NOT NULL
+              AND users.disabled_at IS NULL
             "#,
         )
         .bind(user_id)
         .fetch_one(self.pool())
-        .await
+        .await?;
+
+        Ok(row.into())
+    }
+
+    pub async fn grant_user_admin(&self, user_id: i64) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            r#"
+            UPDATE users
+            SET is_admin = true
+            WHERE id = $1
+            "#,
+        )
+        .bind(user_id)
+        .execute(self.pool())
+        .await?;
+        Ok(())
     }
 
     pub async fn update_last_login(&self, user_id: i64) -> Result<(), sqlx::Error> {
@@ -311,6 +360,7 @@ impl PostgresAdapter {
                 users.username,
                 users.avatar_url,
                 users.email_verified_at,
+                users.is_admin,
                 users.created_at,
                 users.updated_at
             FROM auth_sessions
@@ -342,6 +392,7 @@ impl PostgresAdapter {
                 users.username,
                 users.avatar_url,
                 users.email_verified_at,
+                users.is_admin,
                 users.created_at,
                 users.updated_at
             FROM auth_sessions
@@ -678,18 +729,19 @@ impl PostgresAdapter {
         .execute(&mut *tx)
         .await?;
 
-        let user = sqlx::query_as::<_, AuthUser>(
+        let user = sqlx::query_as::<_, AuthUserRow>(
             r#"
             SELECT
-                id,
-                email::text AS email,
-                username,
-                avatar_url,
-                email_verified_at,
-                created_at,
-                updated_at
+                users.id,
+                users.email::text AS email,
+                users.username,
+                users.avatar_url,
+                users.email_verified_at,
+                users.is_admin,
+                users.created_at,
+                users.updated_at
             FROM users
-            WHERE id = $1
+            WHERE users.id = $1
             "#,
         )
         .bind(user_id)
@@ -697,7 +749,7 @@ impl PostgresAdapter {
         .await?;
 
         tx.commit().await?;
-        Ok(user)
+        Ok(user.into())
     }
 }
 

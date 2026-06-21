@@ -122,6 +122,37 @@ impl PostgresAdapter {
         Ok(())
     }
 
+    pub async fn configure_auth_provider_without_secret_change(
+        &self,
+        provider: &str,
+        base_url: Option<&str>,
+        client_id: &str,
+        scopes: &[String],
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            r#"
+            UPDATE auth_provider_configs
+            SET
+                enabled = true,
+                skipped_at = NULL,
+                base_url = $2,
+                client_id = $3,
+                scopes = $4,
+                configured_at = now()
+            WHERE provider = $1
+              AND client_secret_ciphertext IS NOT NULL
+            "#,
+        )
+        .bind(provider)
+        .bind(base_url)
+        .bind(client_id)
+        .bind(scopes)
+        .execute(self.pool())
+        .await?;
+
+        Ok(())
+    }
+
     pub async fn skip_auth_provider(
         &self,
         provider: &str,

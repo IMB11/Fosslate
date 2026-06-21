@@ -14,6 +14,7 @@ async fn migrations_create_core_schema_tables() {
 
     let tables = [
         "users",
+        "project_language_proofreaders",
         "projects",
         "project_target_languages",
         "namespaces",
@@ -47,6 +48,22 @@ async fn migrations_create_core_schema_tables() {
             "expected {table} table to exist after migrations",
         );
     }
+
+    let is_admin_column = sqlx::query(
+        r#"
+        SELECT EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'users'
+              AND column_name = 'is_admin'
+        ) AS exists
+        "#,
+    )
+    .fetch_one(api.pool())
+    .await
+    .unwrap();
+    assert!(is_admin_column.try_get::<bool, _>("exists").unwrap());
 
     api.cleanup().await;
 }
