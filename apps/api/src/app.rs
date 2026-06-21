@@ -1,6 +1,7 @@
 use axum::{
     Router,
-    http::{HeaderValue, Method, header},
+    http::{HeaderName, HeaderValue, Method, header},
+    middleware,
 };
 use sqlx::PgPool;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
@@ -38,6 +39,7 @@ impl AppState {
                 db.clone(),
                 setup_secret,
                 config.public_app_url.clone(),
+                config.public_api_url.clone(),
                 secrets_key,
                 email_delivery,
             ),
@@ -49,9 +51,14 @@ impl AppState {
 }
 
 pub fn build(state: AppState, config: &Config) -> Router {
+    let middleware_state = state.clone();
     let router = Router::new()
         .merge(routes::router())
         .with_state(state)
+        .layer(middleware::from_fn_with_state(
+            middleware_state,
+            routes::auth::auth_middleware,
+        ))
         .layer(TraceLayer::new_for_http());
 
     match config.cors_allowed_origin.as_deref() {
@@ -60,7 +67,12 @@ pub fn build(state: AppState, config: &Config) -> Router {
                 CorsLayer::new()
                     .allow_origin(origin)
                     .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE])
-                    .allow_headers([header::CONTENT_TYPE, header::AUTHORIZATION]),
+                    .allow_headers([
+                        header::CONTENT_TYPE,
+                        header::AUTHORIZATION,
+                        HeaderName::from_static("x-csrf-token"),
+                    ])
+                    .allow_credentials(true),
             ),
             Err(error) => {
                 tracing::warn!(%error, origin, "ignoring invalid CORS_ALLOWED_ORIGIN");

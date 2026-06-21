@@ -3,6 +3,7 @@ use sqlx::PgPool;
 use crate::adapters::{postgres::PostgresAdapter, resend::EmailDeliveryClient};
 
 pub mod approvals;
+pub mod auth;
 pub mod languages;
 pub mod maintenance;
 pub mod namespaces;
@@ -15,6 +16,7 @@ pub mod users;
 pub mod votes;
 
 pub use approvals::ApprovalService;
+pub use auth::AuthService;
 pub use languages::LanguageService;
 pub use maintenance::MaintenanceService;
 pub use namespaces::NamespaceService;
@@ -29,6 +31,7 @@ pub use votes::VoteService;
 #[derive(Clone)]
 pub struct Services {
     pub users: UserService,
+    pub auth: AuthService,
     pub projects: ProjectService,
     pub languages: LanguageService,
     #[allow(dead_code)]
@@ -47,13 +50,23 @@ impl Services {
         db: PgPool,
         setup_secret: String,
         public_app_url: String,
+        public_api_url: String,
         secrets_key: String,
         email_delivery: EmailDeliveryClient,
     ) -> Self {
         let postgres = PostgresAdapter::new(db);
+        let oauth = crate::adapters::oauth::OAuthClient::new();
 
         Self {
             users: UserService::new(postgres.clone()),
+            auth: AuthService::new(
+                postgres.clone(),
+                email_delivery.clone(),
+                oauth,
+                public_app_url.clone(),
+                public_api_url,
+                secrets_key.clone(),
+            ),
             projects: ProjectService::new(postgres.clone()),
             languages: LanguageService::new(postgres.clone()),
             maintenance: MaintenanceService::new(postgres.clone()),

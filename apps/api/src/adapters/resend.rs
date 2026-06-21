@@ -28,6 +28,16 @@ impl EmailDeliveryClient {
             Self::Static(client) => client.send_test_email().await,
         }
     }
+
+    pub async fn send_email(
+        &self,
+        request: ResendSendEmail<'_>,
+    ) -> Result<String, EmailDeliveryError> {
+        match self {
+            Self::Resend(client) => client.send_email(request).await,
+            Self::Static(client) => client.send_test_email().await,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -48,15 +58,27 @@ impl ResendClient {
         &self,
         request: ResendEmailRequest<'_>,
     ) -> Result<String, EmailDeliveryError> {
+        self.send_email(ResendSendEmail {
+            api_key: request.api_key,
+            from_name: request.from_name,
+            from_email: request.from_email,
+            recipient: request.test_recipient,
+            subject: "Fosslate email delivery test",
+            html: "<strong>Fosslate email delivery is configured.</strong>",
+        })
+        .await
+    }
+
+    async fn send_email(&self, request: ResendSendEmail<'_>) -> Result<String, EmailDeliveryError> {
         let response = self
             .http
             .post(&self.api_url)
             .bearer_auth(request.api_key)
             .json(&ResendSendEmailRequest {
                 from: format!("{} <{}>", request.from_name, request.from_email),
-                to: vec![request.test_recipient.to_owned()],
-                subject: "Fosslate email delivery test".to_owned(),
-                html: "<strong>Fosslate email delivery is configured.</strong>".to_owned(),
+                to: vec![request.recipient.to_owned()],
+                subject: request.subject.to_owned(),
+                html: request.html.to_owned(),
             })
             .send()
             .await?;
@@ -118,6 +140,15 @@ pub struct ResendEmailRequest<'a> {
     pub from_name: &'a str,
     pub from_email: &'a str,
     pub test_recipient: &'a str,
+}
+
+pub struct ResendSendEmail<'a> {
+    pub api_key: &'a str,
+    pub from_name: &'a str,
+    pub from_email: &'a str,
+    pub recipient: &'a str,
+    pub subject: &'a str,
+    pub html: &'a str,
 }
 
 #[derive(Debug, Serialize)]

@@ -4,7 +4,7 @@ use axum::http::StatusCode;
 use serde_json::{Value, json};
 use sqlx::Row;
 
-use common::TestApi;
+use common::{TestApi, TestAuthCookies};
 
 #[tokio::test]
 async fn migrations_create_core_schema_tables() {
@@ -24,6 +24,11 @@ async fn migrations_create_core_schema_tables() {
         "instance_setup",
         "auth_provider_configs",
         "email_delivery_config",
+        "auth_identities",
+        "auth_sessions",
+        "password_reset_tokens",
+        "oauth_login_states",
+        "auth_attempts",
     ];
 
     for table in tables {
@@ -46,9 +51,10 @@ async fn migrations_create_core_schema_tables() {
 #[tokio::test]
 async fn users_can_be_created_listed_and_fetched() {
     let api = TestApi::spawn().await;
+    let cookies = signup(&api).await;
 
     let created = api
-        .post_json("/api/v1/users", &json!({ "username": "calum" }))
+        .post_json_with_auth("/api/v1/users", &json!({ "username": "calum" }), &cookies)
         .await;
     assert_eq!(created.status(), StatusCode::CREATED);
 
@@ -56,7 +62,7 @@ async fn users_can_be_created_listed_and_fetched() {
     assert_eq!(user["username"], "calum");
     assert!(user["id"].as_i64().is_some());
 
-    let list = api.get("/api/v1/users").await;
+    let list = api.get_with_auth("/api/v1/users", &cookies).await;
     assert_eq!(list.status(), StatusCode::OK);
 
     let users: Value = list.json().await;
@@ -66,7 +72,10 @@ async fn users_can_be_created_listed_and_fetched() {
     assert_eq!(users[0]["username"], "calum");
 
     let fetched = api
-        .get(&format!("/api/v1/users/{}", user["id"].as_i64().unwrap()))
+        .get_with_auth(
+            &format!("/api/v1/users/{}", user["id"].as_i64().unwrap()),
+            &cookies,
+        )
         .await;
     assert_eq!(fetched.status(), StatusCode::OK);
 
@@ -80,19 +89,28 @@ async fn users_can_be_created_listed_and_fetched() {
 #[tokio::test]
 async fn duplicate_usernames_are_rejected() {
     let api = TestApi::spawn().await;
+    let cookies = signup(&api).await;
 
     let first = api
-        .post_json("/api/v1/users", &json!({ "username": "duplicate" }))
+        .post_json_with_auth(
+            "/api/v1/users",
+            &json!({ "username": "duplicate" }),
+            &cookies,
+        )
         .await;
     assert_eq!(first.status(), StatusCode::CREATED);
 
     let duplicate = api
-        .post_json("/api/v1/users", &json!({ "username": "duplicate" }))
+        .post_json_with_auth(
+            "/api/v1/users",
+            &json!({ "username": "duplicate" }),
+            &cookies,
+        )
         .await;
 
     assert_ne!(duplicate.status(), StatusCode::CREATED);
 
-    let list = api.get("/api/v1/users").await;
+    let list = api.get_with_auth("/api/v1/users", &cookies).await;
     assert_eq!(list.status(), StatusCode::OK);
 
     let users: Value = list.json().await;
@@ -104,8 +122,9 @@ async fn duplicate_usernames_are_rejected() {
 #[tokio::test]
 async fn missing_user_returns_not_found() {
     let api = TestApi::spawn().await;
+    let cookies = signup(&api).await;
 
-    let missing = api.get("/api/v1/users/999999").await;
+    let missing = api.get_with_auth("/api/v1/users/999999", &cookies).await;
     assert_eq!(missing.status(), StatusCode::NOT_FOUND);
 
     api.cleanup().await;
@@ -114,8 +133,9 @@ async fn missing_user_returns_not_found() {
 #[tokio::test]
 async fn projects_can_be_created_listed_fetched_and_updated() {
     let api = TestApi::spawn().await;
+    let cookies = signup(&api).await;
 
-    let created = create_project(&api, "Fosslate", None, "en", "English").await;
+    let created = create_project(&api, &cookies, "Fosslate", None, "en", "English").await;
     assert_eq!(created["name"], "Fosslate");
     assert_eq!(created["icon_asset_id"], Value::Null);
     assert_eq!(created["source_language"]["key"], "en");
@@ -123,7 +143,7 @@ async fn projects_can_be_created_listed_fetched_and_updated() {
 
     let public_id = created["public_id"].as_str().unwrap();
 
-    let list = api.get("/api/v1/projects").await;
+    let list = api.get_with_auth("/api/v1/projects", &cookies).await;
     assert_eq!(list.status(), StatusCode::OK);
 
     let projects: Value = list.json().await;
@@ -131,7 +151,9 @@ async fn projects_can_be_created_listed_fetched_and_updated() {
     assert_eq!(projects.len(), 1);
     assert_eq!(projects[0]["public_id"], public_id);
 
-    let fetched = api.get(&format!("/api/v1/projects/{public_id}")).await;
+    let fetched = api
+        .get_with_auth(&format!("/api/v1/projects/{public_id}"), &cookies)
+        .await;
     assert_eq!(fetched.status(), StatusCode::OK);
 
     let fetched_project: Value = fetched.json().await;
@@ -139,7 +161,7 @@ async fn projects_can_be_created_listed_fetched_and_updated() {
     assert_eq!(fetched_project["name"], "Fosslate");
 
     let updated = api
-        .put_json(
+        .put_json_with_auth(
             &format!("/api/v1/projects/{public_id}"),
             &json!({
                 "name": "Fosslate Updated",
@@ -149,6 +171,7 @@ async fn projects_can_be_created_listed_fetched_and_updated() {
                     "name": "English (UK)"
                 }
             }),
+            &cookies,
         )
         .await;
     assert_eq!(updated.status(), StatusCode::OK);
@@ -166,24 +189,29 @@ async fn projects_can_be_created_listed_fetched_and_updated() {
 #[tokio::test]
 async fn deleted_projects_are_hidden_from_reads_and_updates() {
     let api = TestApi::spawn().await;
+    let cookies = signup(&api).await;
 
-    let project = create_project(&api, "Disposable", Some(7), "fr", "French").await;
+    let project = create_project(&api, &cookies, "Disposable", Some(7), "fr", "French").await;
     let public_id = project["public_id"].as_str().unwrap();
 
-    let deleted = api.delete(&format!("/api/v1/projects/{public_id}")).await;
+    let deleted = api
+        .delete_with_auth(&format!("/api/v1/projects/{public_id}"), &cookies)
+        .await;
     assert_eq!(deleted.status(), StatusCode::NO_CONTENT);
 
-    let fetched = api.get(&format!("/api/v1/projects/{public_id}")).await;
+    let fetched = api
+        .get_with_auth(&format!("/api/v1/projects/{public_id}"), &cookies)
+        .await;
     assert_eq!(fetched.status(), StatusCode::NOT_FOUND);
 
-    let list = api.get("/api/v1/projects").await;
+    let list = api.get_with_auth("/api/v1/projects", &cookies).await;
     assert_eq!(list.status(), StatusCode::OK);
 
     let projects: Value = list.json().await;
     assert!(projects.as_array().unwrap().is_empty());
 
     let updated = api
-        .put_json(
+        .put_json_with_auth(
             &format!("/api/v1/projects/{public_id}"),
             &json!({
                 "name": "Should Not Return",
@@ -193,6 +221,7 @@ async fn deleted_projects_are_hidden_from_reads_and_updates() {
                     "name": "French"
                 }
             }),
+            &cookies,
         )
         .await;
     assert_eq!(updated.status(), StatusCode::NOT_FOUND);
@@ -202,13 +231,14 @@ async fn deleted_projects_are_hidden_from_reads_and_updates() {
 
 async fn create_project(
     api: &TestApi,
+    cookies: &TestAuthCookies,
     name: &str,
     icon_asset_id: Option<i64>,
     source_language_key: &str,
     source_language_name: &str,
 ) -> Value {
     let created = api
-        .post_json(
+        .post_json_with_auth(
             "/api/v1/projects",
             &json!({
                 "name": name,
@@ -218,9 +248,24 @@ async fn create_project(
                     "name": source_language_name
                 }
             }),
+            cookies,
         )
         .await;
 
     assert_eq!(created.status(), StatusCode::CREATED);
     created.json().await
+}
+
+async fn signup(api: &TestApi) -> TestAuthCookies {
+    api.post_json(
+        "/api/v1/auth/signup",
+        &json!({
+            "email": format!("test-{}@example.com", uuid::Uuid::new_v4()),
+            "password": "Password!",
+            "password_confirmation": "Password!"
+        }),
+    )
+    .await
+    .assert_status(StatusCode::OK)
+    .auth_cookies()
 }

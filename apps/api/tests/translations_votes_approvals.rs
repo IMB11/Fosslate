@@ -198,7 +198,7 @@ async fn create_and_list_translations_enforces_project_language_and_user_constra
             author_user_id: 9_999_999,
             value: "missing user".to_string(),
         },
-        StatusCode::NOT_FOUND,
+        StatusCode::FORBIDDEN,
     )
     .await;
 

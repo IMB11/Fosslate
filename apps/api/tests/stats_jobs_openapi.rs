@@ -408,6 +408,7 @@ async fn openapi_json_contains_route_groups_and_core_paths() {
     let tags = document["tags"].as_array().unwrap();
     for tag in [
         "approvals",
+        "auth",
         "health",
         "languages",
         "meta",
@@ -428,6 +429,16 @@ async fn openapi_json_contains_route_groups_and_core_paths() {
     let paths = document["paths"].as_object().unwrap();
     for path in [
         "/setup/check",
+        "/api/v1/auth/providers",
+        "/api/v1/auth/signup",
+        "/api/v1/auth/login",
+        "/api/v1/auth/session",
+        "/api/v1/auth/session/refresh",
+        "/api/v1/auth/logout",
+        "/api/v1/auth/password/forgot",
+        "/api/v1/auth/password/reset",
+        "/api/v1/auth/sso/{provider}/start",
+        "/api/v1/auth/sso/{provider}/callback",
         "/api/v1/users",
         "/api/v1/setup/verify",
         "/api/v1/setup/status",
@@ -493,6 +504,7 @@ fn services_for_test(pool: sqlx::PgPool) -> Services {
         pool,
         "test-setup-secret".to_owned(),
         "http://localhost:3000".to_owned(),
+        "http://localhost:4000".to_owned(),
         "test-secrets-key".to_owned(),
         EmailDeliveryClient::static_success("test-message-id"),
     )

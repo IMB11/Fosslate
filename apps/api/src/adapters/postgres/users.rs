@@ -21,6 +21,7 @@ impl PostgresAdapter {
             r#"
             SELECT id, username, created_at, updated_at
             FROM users
+            WHERE email IS NULL
             ORDER BY id
             "#,
         )
@@ -34,6 +35,7 @@ impl PostgresAdapter {
             SELECT id, username, created_at, updated_at
             FROM users
             WHERE id = $1
+              AND email IS NULL
             "#,
         )
         .bind(id)

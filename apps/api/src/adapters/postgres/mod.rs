@@ -1,6 +1,7 @@
 use sqlx::{PgPool, Postgres, Transaction};
 
 pub mod approvals;
+pub mod auth;
 pub mod current_translations;
 pub mod languages;
 pub mod namespaces;

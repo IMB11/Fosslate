@@ -11,6 +11,7 @@ pub struct Config {
     pub api_port: u16,
     pub cors_allowed_origin: Option<String>,
     pub public_app_url: String,
+    pub public_api_url: String,
     pub resend_api_url: String,
 }
 
@@ -37,6 +38,11 @@ impl Config {
             .trim()
             .trim_end_matches('/')
             .to_owned();
+        let public_api_url = env::var("PUBLIC_API_URL")
+            .unwrap_or_else(|_| format!("http://{api_host}:{api_port}"))
+            .trim()
+            .trim_end_matches('/')
+            .to_owned();
         let resend_api_url = env::var("RESEND_API_URL")
             .unwrap_or_else(|_| "https://api.resend.com/emails".to_owned())
             .trim()
@@ -51,6 +57,7 @@ impl Config {
             api_port,
             cors_allowed_origin,
             public_app_url,
+            public_api_url,
             resend_api_url,
         })
     }

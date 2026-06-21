@@ -13,6 +13,8 @@ pub enum AppError {
     Database(#[from] sqlx::Error),
     #[error("unauthorized")]
     Unauthorized,
+    #[error("forbidden")]
+    Forbidden,
     #[error("{0}")]
     Conflict(&'static str),
     #[error("{0} not found")]
@@ -48,6 +50,7 @@ impl IntoResponse for AppError {
             }
             Self::Database(_) => (StatusCode::INTERNAL_SERVER_ERROR, "internal_server_error"),
             Self::Unauthorized => (StatusCode::UNAUTHORIZED, "unauthorized"),
+            Self::Forbidden => (StatusCode::FORBIDDEN, "forbidden"),
             Self::Conflict(error) => (StatusCode::CONFLICT, error),
             Self::NotFound(_) => (StatusCode::NOT_FOUND, "not_found"),
             Self::BadRequest(_) => (StatusCode::BAD_REQUEST, "bad_request"),

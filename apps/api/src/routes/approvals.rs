@@ -5,7 +5,12 @@ use axum::{
 use serde::Deserialize;
 use uuid::Uuid;
 
-use crate::{app::AppState, error::AppResult, models::CurrentTranslation};
+use crate::{
+    app::AppState,
+    error::{AppError, AppResult},
+    models::CurrentTranslation,
+    routes::auth::CurrentUser,
+};
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct ApproveTranslationRequest {
@@ -33,9 +38,14 @@ pub struct ApproveTranslationRequest {
 )]
 pub async fn approve_translation(
     State(state): State<AppState>,
+    CurrentUser(current_user): CurrentUser,
     Path((project_public_id, translation_id)): Path<(Uuid, i64)>,
     Json(request): Json<ApproveTranslationRequest>,
 ) -> AppResult<Json<CurrentTranslation>> {
+    if current_user.id != request.approved_by_user_id {
+        return Err(AppError::Forbidden);
+    }
+
     Ok(Json(
         state
             .services

@@ -6,7 +6,12 @@ use axum::{
 use serde::Deserialize;
 use uuid::Uuid;
 
-use crate::{app::AppState, error::AppResult, models::Translation};
+use crate::{
+    app::AppState,
+    error::{AppError, AppResult},
+    models::Translation,
+    routes::auth::CurrentUser,
+};
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct CreateTranslationRequest {
@@ -44,9 +49,14 @@ pub struct ListTranslationsQuery {
 )]
 pub async fn create_translation(
     State(state): State<AppState>,
+    CurrentUser(current_user): CurrentUser,
     Path((project_public_id, string_id)): Path<(Uuid, i64)>,
     Json(request): Json<CreateTranslationRequest>,
 ) -> AppResult<(StatusCode, Json<Translation>)> {
+    if current_user.id != request.author_user_id {
+        return Err(AppError::Forbidden);
+    }
+
     let translation = state
         .services
         .translations

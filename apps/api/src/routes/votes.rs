@@ -5,7 +5,12 @@ use axum::{
 use serde::Deserialize;
 use uuid::Uuid;
 
-use crate::{app::AppState, error::AppResult, models::Translation};
+use crate::{
+    app::AppState,
+    error::{AppError, AppResult},
+    models::Translation,
+    routes::auth::CurrentUser,
+};
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct SetVoteRequest {
@@ -36,9 +41,14 @@ pub struct SetVoteRequest {
 )]
 pub async fn set_vote(
     State(state): State<AppState>,
+    CurrentUser(current_user): CurrentUser,
     Path((project_public_id, translation_id)): Path<(Uuid, i64)>,
     Json(request): Json<SetVoteRequest>,
 ) -> AppResult<Json<Translation>> {
+    if current_user.id != request.user_id {
+        return Err(AppError::Forbidden);
+    }
+
     Ok(Json(
         state
             .services

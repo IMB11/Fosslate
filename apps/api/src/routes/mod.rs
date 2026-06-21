@@ -3,6 +3,7 @@ use axum::{Router, routing::get};
 use crate::{app::AppState, openapi};
 
 pub mod approvals;
+pub mod auth;
 pub mod health;
 pub mod languages;
 pub mod meta;
@@ -20,6 +21,31 @@ pub fn router() -> Router<AppState> {
         .route("/health", get(health::health))
         .route("/setup/check", get(setup::check_setup_required))
         .route("/api/v1/meta", get(meta::meta))
+        .route("/api/v1/auth/providers", get(auth::get_auth_providers))
+        .route("/api/v1/auth/signup", axum::routing::post(auth::signup))
+        .route("/api/v1/auth/login", axum::routing::post(auth::login))
+        .route("/api/v1/auth/session", get(auth::get_auth_session))
+        .route(
+            "/api/v1/auth/session/refresh",
+            axum::routing::post(auth::refresh_auth_session),
+        )
+        .route("/api/v1/auth/logout", axum::routing::post(auth::logout))
+        .route(
+            "/api/v1/auth/password/forgot",
+            axum::routing::post(auth::forgot_password),
+        )
+        .route(
+            "/api/v1/auth/password/reset",
+            axum::routing::post(auth::reset_password),
+        )
+        .route(
+            "/api/v1/auth/sso/{provider}/start",
+            get(auth::start_sso),
+        )
+        .route(
+            "/api/v1/auth/sso/{provider}/callback",
+            get(auth::finish_sso),
+        )
         .route("/api/v1/setup/verify", axum::routing::post(setup::verify_setup_secret))
         .route("/api/v1/setup/status", get(setup::get_setup_status))
         .route(
