@@ -10,17 +10,31 @@ use common::TestApi;
 #[tokio::test]
 async fn signup_sets_session_cookies_and_protects_product_routes() {
     let api = TestApi::spawn().await;
+    configure_email_delivery(&api).await;
 
     let protected = api.get("/api/v1/projects").await;
     assert_eq!(protected.status(), StatusCode::UNAUTHORIZED);
 
+    let email = "admin@example.com";
+    let start = api
+        .post_json(
+            "/api/v1/auth/signup/start",
+            &json!({
+                "email": email,
+                "password": "Password!"
+            }),
+        )
+        .await;
+    assert_eq!(start.status(), StatusCode::ACCEPTED);
+    set_signup_code(&api, email, "123456").await;
+
     let signup = api
         .post_json(
-            "/api/v1/auth/signup",
+            "/api/v1/auth/signup/complete",
             &json!({
-                "email": "admin@example.com",
+                "email": email,
                 "password": "Password!",
-                "password_confirmation": "Password!"
+                "code": "123456"
             }),
         )
         .await;
@@ -195,12 +209,24 @@ async fn reset_password_uses_single_use_token_and_revokes_sessions() {
 }
 
 async fn signup(api: &TestApi, email: &str, password: &str) -> common::TestResponse {
+    configure_email_delivery(api).await;
     api.post_json(
-        "/api/v1/auth/signup",
+        "/api/v1/auth/signup/start",
+        &json!({
+            "email": email,
+            "password": password
+        }),
+    )
+    .await
+    .assert_status(StatusCode::ACCEPTED);
+    set_signup_code(api, email, "123456").await;
+
+    api.post_json(
+        "/api/v1/auth/signup/complete",
         &json!({
             "email": email,
             "password": password,
-            "password_confirmation": password
+            "code": "123456"
         }),
     )
     .await
@@ -229,4 +255,20 @@ async fn configure_email_delivery(api: &TestApi) {
 
 fn token_hash(token: &str) -> String {
     URL_SAFE_NO_PAD.encode(Sha256::digest(token.as_bytes()))
+}
+
+async fn set_signup_code(api: &TestApi, email: &str, code: &str) {
+    sqlx::query(
+        r#"
+        UPDATE signup_email_verifications
+        SET code_hash = $2
+        WHERE email = $1
+          AND used_at IS NULL
+        "#,
+    )
+    .bind(email)
+    .bind(token_hash(&format!("{email}:{code}")))
+    .execute(api.pool())
+    .await
+    .unwrap();
 }

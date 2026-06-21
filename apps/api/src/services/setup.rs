@@ -262,7 +262,10 @@ impl SetupService {
         row: Option<AuthProviderConfigRow>,
         default_scopes: &[&str],
     ) -> AuthProviderSetupStatus {
-        let callback_url = format!("{}/auth/{provider}/callback", self.public_app_url);
+        let callback_url = format!(
+            "{}/api/v1/auth/sso/{provider}/callback",
+            self.public_app_url
+        );
 
         match row {
             Some(row) => {

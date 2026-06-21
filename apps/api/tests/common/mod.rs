@@ -287,7 +287,7 @@ impl TestApp {
             api_port: 0,
             cors_allowed_origin: None,
             public_app_url: "http://localhost:3000".to_owned(),
-            public_api_url: "http://localhost:4000".to_owned(),
+            public_api_url: "http://localhost:3000".to_owned(),
             resend_api_url: "https://api.resend.com/emails".to_owned(),
         };
         let app = app::build(

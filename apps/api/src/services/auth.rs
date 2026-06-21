@@ -6,7 +6,7 @@ use argon2::{
 };
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::{Duration, Utc};
-use rand::{RngCore, rngs::OsRng};
+use rand::{Rng, RngCore, rngs::OsRng};
 use sha2::{Digest, Sha256};
 use url::Url;
 
@@ -15,7 +15,7 @@ use crate::{
         oauth::{OAuthClient, OAuthTokenExchange},
         postgres::{
             PostgresAdapter,
-            auth::{NewOAuthState, NewSession, OAuthIdentity},
+            auth::{NewOAuthState, NewSession, NewSignupEmailVerification, OAuthIdentity},
         },
         resend::{EmailDeliveryClient, ResendSendEmail},
     },
@@ -31,10 +31,16 @@ const GITLAB_PROVIDER: &str = "gitlab";
 const DEFAULT_GITLAB_BASE_URL: &str = "https://gitlab.com";
 
 #[derive(Debug, Clone)]
-pub struct SignupInput {
+pub struct SignupStartInput {
     pub email: String,
     pub password: String,
-    pub password_confirmation: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct SignupCompleteInput {
+    pub email: String,
+    pub password: String,
+    pub code: String,
 }
 
 #[derive(Debug, Clone)]
@@ -112,6 +118,7 @@ pub struct AuthService {
     access_ttl: Duration,
     refresh_ttl: Duration,
     reset_ttl: Duration,
+    signup_code_ttl: Duration,
     oauth_state_ttl: Duration,
 }
 
@@ -139,6 +146,7 @@ impl AuthService {
             access_ttl: Duration::minutes(15),
             refresh_ttl: Duration::days(30),
             reset_ttl: Duration::hours(1),
+            signup_code_ttl: Duration::minutes(10),
             oauth_state_ttl: Duration::minutes(10),
         }
     }
@@ -153,13 +161,94 @@ impl AuthService {
         })
     }
 
-    pub async fn signup(
+    pub async fn start_signup(
         &self,
-        input: SignupInput,
+        input: SignupStartInput,
+        context: RequestContext,
+    ) -> AppResult<()> {
+        let email = normalize_email(&input.email)?;
+        validate_password(&input.password)?;
+
+        if self.postgres.auth_user_by_email(&email).await?.is_some() {
+            return Err(AppError::Conflict("account_exists"));
+        }
+
+        let config = self
+            .postgres
+            .get_reset_email_config(&self.secrets_key)
+            .await?
+            .ok_or(AppError::Conflict("email_delivery_not_configured"))?;
+
+        let code = random_verification_code();
+        self.postgres
+            .create_signup_email_verification(NewSignupEmailVerification {
+                email: &email,
+                code_hash: &signup_code_hash(&email, &code),
+                expires_at: Utc::now() + self.signup_code_ttl,
+                user_agent: context.user_agent.as_deref(),
+                ip_address: context.ip_address.as_deref(),
+            })
+            .await?;
+
+        let html = format!(
+            "<p>Your Fosslate verification code is:</p><p><strong>{code}</strong></p><p>This code expires in 10 minutes.</p>"
+        );
+        self.email_delivery
+            .send_email(ResendSendEmail {
+                api_key: &config.api_key,
+                from_name: &config.from_name,
+                from_email: &config.from_email,
+                recipient: &email,
+                subject: "Verify your Fosslate email",
+                html: &html,
+            })
+            .await
+            .map_err(|error| {
+                tracing::warn!(%error, "signup verification email failed");
+                AppError::ExternalService("email_delivery_failed")
+            })?;
+
+        self.postgres
+            .record_auth_attempt(
+                "signup_start",
+                Some(&email),
+                context.ip_address.as_deref(),
+                true,
+            )
+            .await?;
+
+        Ok(())
+    }
+
+    pub async fn complete_signup(
+        &self,
+        input: SignupCompleteInput,
         context: RequestContext,
     ) -> AppResult<LoginSession> {
         let email = normalize_email(&input.email)?;
-        validate_password(&input.password, &input.password_confirmation)?;
+        validate_password(&input.password)?;
+        let code = normalize_verification_code(&input.code)?;
+
+        if self.postgres.auth_user_by_email(&email).await?.is_some() {
+            return Err(AppError::Conflict("account_exists"));
+        }
+
+        let verified = self
+            .postgres
+            .consume_signup_email_verification(&email, &signup_code_hash(&email, &code))
+            .await?;
+        if !verified {
+            self.postgres
+                .record_auth_attempt(
+                    "signup_complete",
+                    Some(&email),
+                    context.ip_address.as_deref(),
+                    false,
+                )
+                .await?;
+            return Err(AppError::Unauthorized);
+        }
+
         let password_hash = hash_password(&input.password)?;
         let username = username_from_email(&email);
 
@@ -169,6 +258,14 @@ impl AuthService {
             .await?;
 
         self.postgres.update_last_login(user.id).await?;
+        self.postgres
+            .record_auth_attempt(
+                "signup_complete",
+                Some(&email),
+                context.ip_address.as_deref(),
+                true,
+            )
+            .await?;
         self.create_login_session(user, context).await
     }
 
@@ -364,7 +461,8 @@ impl AuthService {
     }
 
     pub async fn reset_password(&self, input: ResetPasswordInput) -> AppResult<()> {
-        validate_password(&input.password, &input.password_confirmation)?;
+        validate_password_confirmation(&input.password, &input.password_confirmation)?;
+        validate_password(&input.password)?;
         let token = input.token.trim();
         if token.is_empty() {
             return Err(AppError::BadRequest("reset token is required"));
@@ -685,10 +783,7 @@ fn normalize_email(email: &str) -> AppResult<String> {
     }
 }
 
-fn validate_password(password: &str, confirmation: &str) -> AppResult<()> {
-    if password != confirmation {
-        return Err(AppError::BadRequest("password confirmation does not match"));
-    }
+fn validate_password(password: &str) -> AppResult<()> {
     if password.chars().count() < 8 {
         return Err(AppError::BadRequest("password is too short"));
     }
@@ -702,6 +797,14 @@ fn validate_password(password: &str, confirmation: &str) -> AppResult<()> {
         return Err(AppError::BadRequest("password requires special character"));
     }
     Ok(())
+}
+
+fn validate_password_confirmation(password: &str, confirmation: &str) -> AppResult<()> {
+    if password != confirmation {
+        Err(AppError::BadRequest("password confirmation does not match"))
+    } else {
+        Ok(())
+    }
 }
 
 fn hash_password(password: &str) -> AppResult<String> {
@@ -727,8 +830,25 @@ fn random_token() -> String {
     URL_SAFE_NO_PAD.encode(bytes)
 }
 
+fn random_verification_code() -> String {
+    format!("{:06}", OsRng.gen_range(0..1_000_000))
+}
+
 fn token_hash(token: &str) -> String {
     URL_SAFE_NO_PAD.encode(Sha256::digest(token.as_bytes()))
+}
+
+fn signup_code_hash(email: &str, code: &str) -> String {
+    token_hash(&format!("{email}:{code}"))
+}
+
+fn normalize_verification_code(code: &str) -> AppResult<String> {
+    let code = code.trim();
+    if code.len() == 6 && code.chars().all(|ch| ch.is_ascii_digit()) {
+        Ok(code.to_owned())
+    } else {
+        Err(AppError::BadRequest("valid verification code is required"))
+    }
 }
 
 fn code_challenge(code_verifier: &str) -> String {

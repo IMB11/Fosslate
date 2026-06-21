@@ -95,7 +95,7 @@ WHERE used_at IS NULL;
 
 CREATE TABLE auth_attempts (
     id BIGSERIAL PRIMARY KEY,
-    kind TEXT NOT NULL CHECK (kind IN ('login', 'password_reset', 'sso')),
+    kind TEXT NOT NULL CHECK (kind IN ('login', 'password_reset', 'sso', 'signup_start', 'signup_complete')),
     email CITEXT,
     ip_address TEXT,
     success BOOLEAN NOT NULL,

@@ -77,11 +77,11 @@ async fn verify_returns_initial_setup_status_and_callback_urls() {
     assert_eq!(body["next_step"], "github");
     assert_eq!(
         body["github"]["callback_url"],
-        "http://localhost:3000/auth/github/callback"
+        "http://localhost:3000/api/v1/auth/sso/github/callback"
     );
     assert_eq!(
         body["gitlab"]["callback_url"],
-        "http://localhost:3000/auth/gitlab/callback"
+        "http://localhost:3000/api/v1/auth/sso/gitlab/callback"
     );
     assert_eq!(body["gitlab"]["base_url"], "https://gitlab.com");
     assert_eq!(body["email"]["configured"], false);

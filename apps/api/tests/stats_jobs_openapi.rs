@@ -430,7 +430,8 @@ async fn openapi_json_contains_route_groups_and_core_paths() {
     for path in [
         "/setup/check",
         "/api/v1/auth/providers",
-        "/api/v1/auth/signup",
+        "/api/v1/auth/signup/start",
+        "/api/v1/auth/signup/complete",
         "/api/v1/auth/login",
         "/api/v1/auth/session",
         "/api/v1/auth/session/refresh",

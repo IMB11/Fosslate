@@ -1,7 +1,9 @@
 mod common;
 
 use axum::http::StatusCode;
+use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
 use sqlx::Row;
 
 use common::{TestApi, TestAuthCookies};
@@ -29,6 +31,7 @@ async fn migrations_create_core_schema_tables() {
         "password_reset_tokens",
         "oauth_login_states",
         "auth_attempts",
+        "signup_email_verifications",
     ];
 
     for table in tables {
@@ -257,15 +260,68 @@ async fn create_project(
 }
 
 async fn signup(api: &TestApi) -> TestAuthCookies {
+    configure_email_delivery(api).await;
+    let email = format!("test-{}@example.com", uuid::Uuid::new_v4());
     api.post_json(
-        "/api/v1/auth/signup",
+        "/api/v1/auth/signup/start",
         &json!({
-            "email": format!("test-{}@example.com", uuid::Uuid::new_v4()),
+            "email": email,
+            "password": "Password!"
+        }),
+    )
+    .await
+    .assert_status(StatusCode::ACCEPTED);
+    set_signup_code(api, &email, "123456").await;
+
+    api.post_json(
+        "/api/v1/auth/signup/complete",
+        &json!({
+            "email": email,
             "password": "Password!",
-            "password_confirmation": "Password!"
+            "code": "123456"
         }),
     )
     .await
     .assert_status(StatusCode::OK)
     .auth_cookies()
+}
+
+async fn configure_email_delivery(api: &TestApi) {
+    api.put_json_with_setup_secret("/api/v1/setup/sso/github", &json!({ "enabled": false }))
+        .await
+        .assert_status(StatusCode::OK);
+    api.put_json_with_setup_secret("/api/v1/setup/sso/gitlab", &json!({ "enabled": false }))
+        .await
+        .assert_status(StatusCode::OK);
+    api.post_json_with_setup_secret(
+        "/api/v1/setup/email/test",
+        &json!({
+            "resend_api_key": "re_test",
+            "from_name": "Fosslate",
+            "from_email": "hello@example.com",
+            "test_recipient": "admin@example.com"
+        }),
+    )
+    .await
+    .assert_status(StatusCode::OK);
+}
+
+async fn set_signup_code(api: &TestApi, email: &str, code: &str) {
+    sqlx::query(
+        r#"
+        UPDATE signup_email_verifications
+        SET code_hash = $2
+        WHERE email = $1
+          AND used_at IS NULL
+        "#,
+    )
+    .bind(email)
+    .bind(token_hash(&format!("{email}:{code}")))
+    .execute(api.pool())
+    .await
+    .unwrap();
+}
+
+fn token_hash(token: &str) -> String {
+    URL_SAFE_NO_PAD.encode(Sha256::digest(token.as_bytes()))
 }

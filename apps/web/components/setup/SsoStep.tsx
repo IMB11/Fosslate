@@ -1,6 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import type { FormEvent } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Button } from "@/components/retroui/Button";
 import { Input } from "@/components/retroui/Input";
@@ -30,6 +30,13 @@ export function SsoStep({
   const [clientId, setClientId] = useState(providerStatus.client_id ?? "");
   const [clientSecret, setClientSecret] = useState("");
   const [baseUrl, setBaseUrl] = useState(providerStatus.base_url ?? "https://gitlab.com");
+  const [callbackUrl, setCallbackUrl] = useState(providerStatus.callback_url);
+
+  useEffect(() => {
+    setCallbackUrl(
+      `${window.location.origin}/api/v1/auth/sso/${provider}/callback`,
+    );
+  }, [provider]);
 
   const saveMutation = useMutation({
     mutationFn: (body: SaveSsoProviderRequest) =>
@@ -63,7 +70,7 @@ export function SsoStep({
 
   return (
     <form className="space-y-5" onSubmit={handleSubmit}>
-      <CallbackUrl value={providerStatus.callback_url} />
+      <CallbackUrl value={callbackUrl} />
 
       {provider === "gitlab" ? (
         <SetupField label="GitLab base URL">
@@ -120,4 +127,3 @@ export function SsoStep({
     </form>
   );
 }
-

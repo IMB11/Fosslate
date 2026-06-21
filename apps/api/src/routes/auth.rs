@@ -18,23 +18,38 @@ use crate::{
     models::{AuthProvidersResponse, AuthUser, AuthUserResponse},
     services::auth::{
         AuthCookies, ForgotPasswordInput, LoginInput, RequestContext, ResetPasswordInput,
-        SignupInput,
+        SignupCompleteInput, SignupStartInput,
     },
 };
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
-pub struct SignupRequest {
+pub struct SignupStartRequest {
     pub email: String,
     pub password: String,
-    pub password_confirmation: String,
 }
 
-impl From<SignupRequest> for SignupInput {
-    fn from(request: SignupRequest) -> Self {
+impl From<SignupStartRequest> for SignupStartInput {
+    fn from(request: SignupStartRequest) -> Self {
         Self {
             email: request.email,
             password: request.password,
-            password_confirmation: request.password_confirmation,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct SignupCompleteRequest {
+    pub email: String,
+    pub password: String,
+    pub code: String,
+}
+
+impl From<SignupCompleteRequest> for SignupCompleteInput {
+    fn from(request: SignupCompleteRequest) -> Self {
+        Self {
+            email: request.email,
+            password: request.password,
+            code: request.code,
         }
     }
 }
@@ -134,28 +149,58 @@ pub async fn get_auth_providers(
 
 #[utoipa::path(
     post,
-    path = "/api/v1/auth/signup",
+    path = "/api/v1/auth/signup/start",
     tag = "auth",
-    operation_id = "signup",
-    summary = "Create an account",
-    description = "Creates a password-backed user account, starts a browser session, and sets HttpOnly session cookies plus a CSRF cookie.",
-    request_body(content = SignupRequest),
+    operation_id = "start_signup",
+    summary = "Start account creation",
+    description = "Validates signup input and sends a one-time email verification code without creating or authenticating a user.",
+    request_body(content = SignupStartRequest),
     responses(
-        (status = 200, description = "Account created and session cookies set.", body = AuthUserResponse),
+        (status = 202, description = "Verification email accepted."),
         (status = 400, description = "Signup request is invalid.", body = crate::error::ErrorBody),
-        (status = 409, description = "Email or username conflicts with an existing user.", body = crate::error::ErrorBody),
+        (status = 409, description = "Account already exists or email delivery is not configured.", body = crate::error::ErrorBody),
+        (status = 502, description = "Email delivery failed.", body = crate::error::ErrorBody),
         (status = 500, description = "Database request failed.", body = crate::error::ErrorBody)
     )
 )]
-pub async fn signup(
+pub async fn start_signup(
     State(state): State<AppState>,
     headers: HeaderMap,
-    Json(request): Json<SignupRequest>,
+    Json(request): Json<SignupStartRequest>,
+) -> AppResult<StatusCode> {
+    state
+        .services
+        .auth
+        .start_signup(request.into(), request_context(&headers))
+        .await?;
+    Ok(StatusCode::ACCEPTED)
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/auth/signup/complete",
+    tag = "auth",
+    operation_id = "complete_signup",
+    summary = "Complete account creation",
+    description = "Consumes an unexpired one-time email verification code, creates a verified password-backed user, and sets session cookies.",
+    request_body(content = SignupCompleteRequest),
+    responses(
+        (status = 200, description = "Account created and session cookies set.", body = AuthUserResponse),
+        (status = 400, description = "Signup request is invalid.", body = crate::error::ErrorBody),
+        (status = 401, description = "Verification code is invalid or expired.", body = crate::error::ErrorBody),
+        (status = 409, description = "Account already exists.", body = crate::error::ErrorBody),
+        (status = 500, description = "Database request failed.", body = crate::error::ErrorBody)
+    )
+)]
+pub async fn complete_signup(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(request): Json<SignupCompleteRequest>,
 ) -> AppResult<(HeaderMap, Json<AuthUserResponse>)> {
     let session = state
         .services
         .auth
-        .signup(request.into(), request_context(&headers))
+        .complete_signup(request.into(), request_context(&headers))
         .await?;
     let headers = cookie_headers(&state, &session.cookies)?;
     Ok((headers, Json(AuthUserResponse { user: session.user })))

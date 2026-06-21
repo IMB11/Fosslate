@@ -39,7 +39,7 @@ impl Config {
             .trim_end_matches('/')
             .to_owned();
         let public_api_url = env::var("PUBLIC_API_URL")
-            .unwrap_or_else(|_| format!("http://{api_host}:{api_port}"))
+            .unwrap_or_else(|_| public_app_url.clone())
             .trim()
             .trim_end_matches('/')
             .to_owned();

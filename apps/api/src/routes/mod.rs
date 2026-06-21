@@ -22,7 +22,14 @@ pub fn router() -> Router<AppState> {
         .route("/setup/check", get(setup::check_setup_required))
         .route("/api/v1/meta", get(meta::meta))
         .route("/api/v1/auth/providers", get(auth::get_auth_providers))
-        .route("/api/v1/auth/signup", axum::routing::post(auth::signup))
+        .route(
+            "/api/v1/auth/signup/start",
+            axum::routing::post(auth::start_signup),
+        )
+        .route(
+            "/api/v1/auth/signup/complete",
+            axum::routing::post(auth::complete_signup),
+        )
         .route("/api/v1/auth/login", axum::routing::post(auth::login))
         .route("/api/v1/auth/session", get(auth::get_auth_session))
         .route(

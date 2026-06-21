@@ -74,6 +74,15 @@ pub struct NewOAuthState<'a> {
 }
 
 #[derive(Debug, Clone)]
+pub struct NewSignupEmailVerification<'a> {
+    pub email: &'a str,
+    pub code_hash: &'a str,
+    pub expires_at: DateTime<Utc>,
+    pub user_agent: Option<&'a str>,
+    pub ip_address: Option<&'a str>,
+}
+
+#[derive(Debug, Clone)]
 pub struct OAuthIdentity<'a> {
     pub provider: &'a str,
     pub provider_user_id: &'a str,
@@ -132,6 +141,72 @@ impl PostgresAdapter {
         .bind(avatar_url)
         .fetch_one(self.pool())
         .await
+    }
+
+    pub async fn create_signup_email_verification(
+        &self,
+        input: NewSignupEmailVerification<'_>,
+    ) -> Result<(), sqlx::Error> {
+        let mut tx = self.pool().begin().await?;
+
+        sqlx::query(
+            r#"
+            UPDATE signup_email_verifications
+            SET used_at = now()
+            WHERE email = $1
+              AND used_at IS NULL
+            "#,
+        )
+        .bind(input.email)
+        .execute(&mut *tx)
+        .await?;
+
+        sqlx::query(
+            r#"
+            INSERT INTO signup_email_verifications (
+                email,
+                code_hash,
+                expires_at,
+                requested_user_agent,
+                requested_ip_address
+            )
+            VALUES ($1, $2, $3, $4, $5)
+            "#,
+        )
+        .bind(input.email)
+        .bind(input.code_hash)
+        .bind(input.expires_at)
+        .bind(input.user_agent)
+        .bind(input.ip_address)
+        .execute(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
+        Ok(())
+    }
+
+    pub async fn consume_signup_email_verification(
+        &self,
+        email: &str,
+        code_hash: &str,
+    ) -> Result<bool, sqlx::Error> {
+        let consumed_id = sqlx::query_scalar::<_, i64>(
+            r#"
+            UPDATE signup_email_verifications
+            SET used_at = now()
+            WHERE email = $1
+              AND code_hash = $2
+              AND used_at IS NULL
+              AND expires_at > now()
+            RETURNING id
+            "#,
+        )
+        .bind(email)
+        .bind(code_hash)
+        .fetch_optional(self.pool())
+        .await?;
+
+        Ok(consumed_id.is_some())
     }
 
     pub async fn auth_user_by_email(

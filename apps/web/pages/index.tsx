@@ -1,5 +1,6 @@
 import type { GetServerSideProps, InferGetServerSidePropsType } from "next";
 
+import { AuthButton } from "@/components/auth/AuthButton";
 import { Card } from "@/components/retroui/Card";
 import { Text } from "@/components/retroui/Text";
 import { getBackendMeta, type BackendMetaResult } from "@/lib/api";
@@ -27,9 +28,9 @@ export default function Home({
           <Text>
             {backend.ok ? "Backend request succeeded" : backend.error}
           </Text>
+          <AuthButton />
         </Card.Content>
       </Card>
     </main>
   );
 }
-
