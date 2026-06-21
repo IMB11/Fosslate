@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 
-use crate::models::AuthUser;
+use crate::models::{AccountIdentity, AccountSsoProvider, AuthUser};
 
 use super::PostgresAdapter;
 
@@ -62,6 +62,20 @@ pub struct OAuthStateRow {
     pub provider: String,
     pub pkce_verifier: String,
     pub redirect_to: String,
+    pub action: String,
+    pub user_id: Option<i64>,
+}
+
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct AccountIdentityRow {
+    pub provider: String,
+    pub provider_user_id: String,
+    pub user_id: i64,
+    pub email: Option<String>,
+    pub username: Option<String>,
+    pub avatar_url: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone)]
@@ -82,6 +96,8 @@ pub struct NewOAuthState<'a> {
     pub provider: &'a str,
     pub pkce_verifier: &'a str,
     pub redirect_to: &'a str,
+    pub action: &'a str,
+    pub user_id: Option<i64>,
     pub expires_at: DateTime<Utc>,
     pub secrets_key: &'a str,
 }
@@ -131,6 +147,36 @@ impl From<AuthUserRow> for AuthUser {
             created_at: row.created_at,
             updated_at: row.updated_at,
         }
+    }
+}
+
+impl TryFrom<AccountIdentityRow> for AccountIdentity {
+    type Error = sqlx::Error;
+
+    fn try_from(row: AccountIdentityRow) -> Result<Self, Self::Error> {
+        let provider = match row.provider.as_str() {
+            "github" => AccountSsoProvider::Github,
+            "gitlab" => AccountSsoProvider::Gitlab,
+            _ => {
+                return Err(sqlx::Error::ColumnDecode {
+                    index: "provider".to_owned(),
+                    source: std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        "unknown auth provider",
+                    )
+                    .into(),
+                });
+            }
+        };
+
+        Ok(Self {
+            provider,
+            email: row.email,
+            username: row.username,
+            avatar_url: row.avatar_url,
+            connected_at: row.created_at,
+            updated_at: row.updated_at,
+        })
     }
 }
 
@@ -470,6 +516,145 @@ impl PostgresAdapter {
         Ok(())
     }
 
+    pub async fn user_has_password(&self, user_id: i64) -> Result<bool, sqlx::Error> {
+        sqlx::query_scalar::<_, bool>(
+            r#"
+            SELECT password_hash IS NOT NULL
+            FROM users
+            WHERE id = $1
+            "#,
+        )
+        .bind(user_id)
+        .fetch_one(self.pool())
+        .await
+    }
+
+    pub async fn account_identities(
+        &self,
+        user_id: i64,
+    ) -> Result<Vec<AccountIdentity>, sqlx::Error> {
+        let rows = sqlx::query_as::<_, AccountIdentityRow>(
+            r#"
+            SELECT
+                provider,
+                provider_user_id,
+                user_id,
+                email::text AS email,
+                username,
+                avatar_url,
+                created_at,
+                updated_at
+            FROM auth_identities
+            WHERE user_id = $1
+            ORDER BY provider
+            "#,
+        )
+        .bind(user_id)
+        .fetch_all(self.pool())
+        .await?;
+
+        rows.into_iter().map(AccountIdentity::try_from).collect()
+    }
+
+    pub async fn account_identity_for_provider(
+        &self,
+        user_id: i64,
+        provider: &str,
+    ) -> Result<Option<AccountIdentityRow>, sqlx::Error> {
+        sqlx::query_as::<_, AccountIdentityRow>(
+            r#"
+            SELECT
+                provider,
+                provider_user_id,
+                user_id,
+                email::text AS email,
+                username,
+                avatar_url,
+                created_at,
+                updated_at
+            FROM auth_identities
+            WHERE user_id = $1
+              AND provider = $2
+            "#,
+        )
+        .bind(user_id)
+        .bind(provider)
+        .fetch_optional(self.pool())
+        .await
+    }
+
+    pub async fn oauth_identity_user_id(
+        &self,
+        provider: &str,
+        provider_user_id: &str,
+    ) -> Result<Option<i64>, sqlx::Error> {
+        sqlx::query_scalar::<_, i64>(
+            r#"
+            SELECT user_id
+            FROM auth_identities
+            WHERE provider = $1
+              AND provider_user_id = $2
+            "#,
+        )
+        .bind(provider)
+        .bind(provider_user_id)
+        .fetch_optional(self.pool())
+        .await
+    }
+
+    pub async fn upsert_account_identity(
+        &self,
+        user_id: i64,
+        identity: OAuthIdentity<'_>,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            r#"
+            INSERT INTO auth_identities (
+                provider,
+                provider_user_id,
+                user_id,
+                email,
+                username,
+                avatar_url
+            )
+            VALUES ($1, $2, $3, $4, $5, $6)
+            ON CONFLICT (provider, provider_user_id) DO UPDATE
+            SET
+                email = EXCLUDED.email,
+                username = EXCLUDED.username,
+                avatar_url = EXCLUDED.avatar_url
+            "#,
+        )
+        .bind(identity.provider)
+        .bind(identity.provider_user_id)
+        .bind(user_id)
+        .bind(identity.email)
+        .bind(identity.username)
+        .bind(identity.avatar_url)
+        .execute(self.pool())
+        .await?;
+        Ok(())
+    }
+
+    pub async fn remove_account_identity(
+        &self,
+        user_id: i64,
+        provider: &str,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            r#"
+            DELETE FROM auth_identities
+            WHERE user_id = $1
+              AND provider = $2
+            "#,
+        )
+        .bind(user_id)
+        .bind(provider)
+        .execute(self.pool())
+        .await?;
+        Ok(())
+    }
+
     pub async fn create_password_reset_token(
         &self,
         user_id: i64,
@@ -593,15 +778,19 @@ impl PostgresAdapter {
                 provider,
                 pkce_verifier_ciphertext,
                 redirect_to,
+                action,
+                user_id,
                 expires_at
             )
-            VALUES ($1, $2, pgp_sym_encrypt($3, $6), $4, $5)
+            VALUES ($1, $2, pgp_sym_encrypt($3, $8), $4, $5, $6, $7)
             "#,
         )
         .bind(input.state_hash)
         .bind(input.provider)
         .bind(input.pkce_verifier)
         .bind(input.redirect_to)
+        .bind(input.action)
+        .bind(input.user_id)
         .bind(input.expires_at)
         .bind(input.secrets_key)
         .execute(self.pool())
@@ -624,7 +813,9 @@ impl PostgresAdapter {
             RETURNING
                 provider,
                 pgp_sym_decrypt(pkce_verifier_ciphertext, $2) AS pkce_verifier,
-                redirect_to
+                redirect_to,
+                action,
+                user_id
             "#,
         )
         .bind(state_hash)

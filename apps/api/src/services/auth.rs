@@ -20,7 +20,10 @@ use crate::{
         resend::{EmailDeliveryClient, ResendSendEmail},
     },
     error::{AppError, AppResult},
-    models::{AuthProvidersResponse, AuthUser, SsoProviderAvailability, SsoProviders},
+    models::{
+        AccountSecurityResponse, AuthProvidersResponse, AuthUser, SsoProviderAvailability,
+        SsoProviders,
+    },
 };
 
 const ACCESS_COOKIE: &str = "fs_access";
@@ -57,6 +60,12 @@ pub struct ForgotPasswordInput {
 #[derive(Debug, Clone)]
 pub struct ResetPasswordInput {
     pub token: String,
+    pub password: String,
+    pub password_confirmation: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct UpdateAccountPasswordInput {
     pub password: String,
     pub password_confirmation: String,
 }
@@ -103,7 +112,7 @@ pub struct SsoStart {
 #[derive(Debug, Clone)]
 pub struct SsoCallback {
     pub redirect_to: String,
-    pub cookies: AuthCookies,
+    pub cookies: Option<AuthCookies>,
 }
 
 #[derive(Clone)]
@@ -159,6 +168,13 @@ impl AuthService {
             password: true,
             sso: SsoProviders { github, gitlab },
         })
+    }
+
+    pub async fn account_security(
+        &self,
+        current_user: &AuthUser,
+    ) -> AppResult<AccountSecurityResponse> {
+        self.account_security_for_user(current_user.id).await
     }
 
     pub async fn start_signup(
@@ -485,6 +501,20 @@ impl AuthService {
         Ok(())
     }
 
+    pub async fn update_account_password(
+        &self,
+        current_user: &AuthUser,
+        input: UpdateAccountPasswordInput,
+    ) -> AppResult<AccountSecurityResponse> {
+        validate_password_confirmation(&input.password, &input.password_confirmation)?;
+        validate_password(&input.password)?;
+        let password_hash = hash_password(&input.password)?;
+        self.postgres
+            .update_password_hash(current_user.id, &password_hash)
+            .await?;
+        self.account_security_for_user(current_user.id).await
+    }
+
     pub async fn start_sso(
         &self,
         provider: &str,
@@ -509,6 +539,8 @@ impl AuthService {
                 provider,
                 pkce_verifier: &code_verifier,
                 redirect_to: &redirect_to,
+                action: "login",
+                user_id: None,
                 expires_at: Utc::now() + self.oauth_state_ttl,
                 secrets_key: &self.secrets_key,
             })
@@ -546,6 +578,99 @@ impl AuthService {
         };
 
         Ok(SsoStart { redirect_url })
+    }
+
+    pub async fn start_account_sso(
+        &self,
+        current_user: &AuthUser,
+        provider: &str,
+    ) -> AppResult<SsoStart> {
+        let provider = normalized_provider(provider)?;
+        let config = self
+            .postgres
+            .get_enabled_provider_config(provider, &self.secrets_key)
+            .await?
+            .ok_or(AppError::NotFound("auth_provider"))?;
+
+        if self
+            .postgres
+            .account_identity_for_provider(current_user.id, provider)
+            .await?
+            .is_some()
+        {
+            return Err(AppError::Conflict("identity_already_linked"));
+        }
+
+        let state = random_token();
+        let code_verifier = random_token();
+        let code_challenge = code_challenge(&code_verifier);
+        let redirect_to = format!("/settings/profile?sso_linked={provider}");
+        let callback_url = self.callback_url(provider);
+
+        self.postgres
+            .create_oauth_state(NewOAuthState {
+                state_hash: &token_hash(&state),
+                provider,
+                pkce_verifier: &code_verifier,
+                redirect_to: &redirect_to,
+                action: "link",
+                user_id: Some(current_user.id),
+                expires_at: Utc::now() + self.oauth_state_ttl,
+                secrets_key: &self.secrets_key,
+            })
+            .await?;
+
+        let scopes = config.scopes.join(" ");
+        let redirect_url = if provider == GITHUB_PROVIDER {
+            let mut url = Url::parse("https://github.com/login/oauth/authorize")
+                .map_err(|_| AppError::BadRequest("invalid oauth url"))?;
+            url.query_pairs_mut()
+                .append_pair("client_id", &config.client_id)
+                .append_pair("redirect_uri", &callback_url)
+                .append_pair("scope", &scopes)
+                .append_pair("state", &state)
+                .append_pair("code_challenge", &code_challenge)
+                .append_pair("code_challenge_method", "S256");
+            url.to_string()
+        } else {
+            let base_url = config
+                .base_url
+                .as_deref()
+                .unwrap_or(DEFAULT_GITLAB_BASE_URL)
+                .trim_end_matches('/');
+            let mut url = Url::parse(&format!("{base_url}/oauth/authorize"))
+                .map_err(|_| AppError::BadRequest("invalid oauth url"))?;
+            url.query_pairs_mut()
+                .append_pair("client_id", &config.client_id)
+                .append_pair("redirect_uri", &callback_url)
+                .append_pair("response_type", "code")
+                .append_pair("scope", &scopes)
+                .append_pair("state", &state)
+                .append_pair("code_challenge", &code_challenge)
+                .append_pair("code_challenge_method", "S256");
+            url.to_string()
+        };
+
+        Ok(SsoStart { redirect_url })
+    }
+
+    pub async fn remove_account_sso(
+        &self,
+        current_user: &AuthUser,
+        provider: &str,
+    ) -> AppResult<AccountSecurityResponse> {
+        let provider = normalized_provider(provider)?;
+        let has_password = self.postgres.user_has_password(current_user.id).await?;
+        let identities = self.postgres.account_identities(current_user.id).await?;
+
+        if identities.len() <= 1 && !has_password {
+            return Err(AppError::Conflict("password_required"));
+        }
+
+        self.postgres
+            .remove_account_identity(current_user.id, provider)
+            .await?;
+        self.account_security_for_user(current_user.id).await
     }
 
     pub async fn finish_sso(
@@ -629,22 +754,32 @@ impl AuthService {
             AppError::ExternalService("oauth_failed")
         })?;
 
-        let user = self
-            .postgres
-            .upsert_oauth_user(OAuthIdentity {
-                provider,
-                provider_user_id: &identity.provider_user_id,
-                email: &identity.email,
-                username: &identity.username,
-                avatar_url: identity.avatar_url.as_deref(),
-            })
-            .await?;
+        let oauth_identity = OAuthIdentity {
+            provider,
+            provider_user_id: &identity.provider_user_id,
+            email: &identity.email,
+            username: &identity.username,
+            avatar_url: identity.avatar_url.as_deref(),
+        };
+
+        if state_row.action == "link" {
+            let user_id = state_row.user_id.ok_or(AppError::Unauthorized)?;
+            self.link_oauth_identity_to_user(user_id, oauth_identity)
+                .await?;
+
+            return Ok(SsoCallback {
+                redirect_to: state_row.redirect_to,
+                cookies: None,
+            });
+        }
+
+        let user = self.postgres.upsert_oauth_user(oauth_identity).await?;
 
         let session = self.create_login_session(user, context).await?;
 
         Ok(SsoCallback {
             redirect_to: state_row.redirect_to,
-            cookies: session.cookies,
+            cookies: Some(session.cookies),
         })
     }
 
@@ -704,6 +839,44 @@ impl AuthService {
             start_url: enabled.then(|| format!("/api/v1/auth/sso/{provider}/start")),
             base_url,
         })
+    }
+
+    async fn account_security_for_user(&self, user_id: i64) -> AppResult<AccountSecurityResponse> {
+        Ok(AccountSecurityResponse {
+            password_enabled: self.postgres.user_has_password(user_id).await?,
+            identities: self.postgres.account_identities(user_id).await?,
+        })
+    }
+
+    async fn link_oauth_identity_to_user(
+        &self,
+        user_id: i64,
+        identity: OAuthIdentity<'_>,
+    ) -> AppResult<()> {
+        if let Some(existing_user_id) = self
+            .postgres
+            .oauth_identity_user_id(identity.provider, identity.provider_user_id)
+            .await?
+        {
+            if existing_user_id != user_id {
+                return Err(AppError::Conflict("identity_in_use"));
+            }
+        }
+
+        if let Some(existing_identity) = self
+            .postgres
+            .account_identity_for_provider(user_id, identity.provider)
+            .await?
+        {
+            if existing_identity.provider_user_id != identity.provider_user_id {
+                return Err(AppError::Conflict("identity_already_linked"));
+            }
+        }
+
+        self.postgres
+            .upsert_account_identity(user_id, identity)
+            .await?;
+        Ok(())
     }
 
     async fn create_login_session(

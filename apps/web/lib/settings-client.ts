@@ -10,6 +10,22 @@ export type InstanceSettings = {
   email: EmailDeliverySetupStatus;
 };
 
+export type AccountSsoProvider = "github" | "gitlab";
+
+export type AccountIdentity = {
+  provider: AccountSsoProvider;
+  email: string | null;
+  username: string | null;
+  avatar_url: string | null;
+  connected_at: string;
+  updated_at: string;
+};
+
+export type AccountSecurity = {
+  password_enabled: boolean;
+  identities: AccountIdentity[];
+};
+
 export type SaveInstanceSsoProviderRequest = {
   enabled: boolean;
   client_id?: string;
@@ -91,6 +107,28 @@ export async function getInstanceSettings(): Promise<InstanceSettings> {
   return settingsRequest<InstanceSettings>("/instance");
 }
 
+export async function getAccountSecurity(): Promise<AccountSecurity> {
+  return settingsRequest<AccountSecurity>("/profile/security");
+}
+
+export async function updateAccountPassword(body: {
+  password: string;
+  password_confirmation: string;
+}): Promise<AccountSecurity> {
+  return settingsRequest<AccountSecurity>("/profile/password", {
+    method: "POST",
+    body: jsonBody(body),
+  });
+}
+
+export async function removeAccountSso(
+  provider: AccountSsoProvider,
+): Promise<AccountSecurity> {
+  return settingsRequest<AccountSecurity>(`/profile/sso/${provider}`, {
+    method: "DELETE",
+  });
+}
+
 export async function saveInstanceSsoProvider(
   provider: "github" | "gitlab",
   body: SaveInstanceSsoProviderRequest,
@@ -126,6 +164,18 @@ export function settingsErrorMessage(error: unknown): string {
 
     if (error.code === "bad_request") {
       return "Check the fields and try again.";
+    }
+
+    if (error.code === "password_required") {
+      return "Add a password before removing your final SSO option.";
+    }
+
+    if (error.code === "identity_in_use") {
+      return "That SSO identity is already connected to another account.";
+    }
+
+    if (error.code === "identity_already_linked") {
+      return "That SSO provider is already connected.";
     }
   }
 

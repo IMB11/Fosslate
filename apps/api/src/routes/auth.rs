@@ -421,7 +421,10 @@ pub async fn finish_sso(
             request_context(&headers),
         )
         .await?;
-    let mut headers = cookie_headers(&state, &callback.cookies)?;
+    let mut headers = HeaderMap::new();
+    if let Some(cookies) = callback.cookies {
+        headers = cookie_headers(&state, &cookies)?;
+    }
     headers.insert(
         LOCATION,
         HeaderValue::from_str(&callback.redirect_to)

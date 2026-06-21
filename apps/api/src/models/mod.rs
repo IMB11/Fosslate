@@ -15,7 +15,8 @@ pub mod vote;
 
 pub use approval::TranslationApproval;
 pub use auth::{
-    AuthProvidersResponse, AuthUser, AuthUserResponse, SsoProviderAvailability, SsoProviders,
+    AccountIdentity, AccountSecurityResponse, AccountSsoProvider, AuthProvidersResponse, AuthUser,
+    AuthUserResponse, SsoProviderAvailability, SsoProviders,
 };
 pub use current_translation::{CurrentTranslation, select_current_translation};
 pub use instance_settings::InstanceSettings;

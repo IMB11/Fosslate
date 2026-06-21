@@ -1,6 +1,6 @@
 mod common;
 
-use axum::http::StatusCode;
+use axum::http::{StatusCode, header::LOCATION};
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -128,6 +128,35 @@ async fn admin_can_read_and_update_masked_sso_settings() {
     assert_eq!(body["github"]["client_id"], "github-client-renamed");
     assert_eq!(body["github"]["has_client_secret"], true);
 
+    let disabled = api
+        .put_json_with_auth(
+            "/api/v1/settings/instance/sso/github",
+            &json!({ "enabled": false }),
+            &cookies,
+        )
+        .await;
+    assert_eq!(disabled.status(), StatusCode::OK);
+    let body: Value = disabled.json().await;
+    assert_eq!(body["github"]["enabled"], false);
+    assert_eq!(body["github"]["client_id"], "github-client-renamed");
+    assert_eq!(body["github"]["has_client_secret"], true);
+
+    let reenabled = api
+        .put_json_with_auth(
+            "/api/v1/settings/instance/sso/github",
+            &json!({
+                "enabled": true,
+                "client_id": "github-client-renamed"
+            }),
+            &cookies,
+        )
+        .await;
+    assert_eq!(reenabled.status(), StatusCode::OK);
+    let body: Value = reenabled.json().await;
+    assert_eq!(body["github"]["enabled"], true);
+    assert_eq!(body["github"]["client_id"], "github-client-renamed");
+    assert_eq!(body["github"]["has_client_secret"], true);
+
     api.cleanup().await;
 }
 
@@ -171,6 +200,159 @@ async fn admin_can_test_email_and_retain_saved_api_key() {
     assert_eq!(body["email"]["has_api_key"], true);
     assert_eq!(body["email"]["from_name"], "Fosslate Mail");
     assert_eq!(body["email"]["last_test_recipient"], "ops@example.com");
+
+    api.cleanup().await;
+}
+
+#[tokio::test]
+async fn current_user_can_update_account_password() {
+    let api = TestApi::spawn().await;
+    let cookies = signup(&api, "password-profile@example.com").await;
+
+    let security = api
+        .get_with_auth("/api/v1/settings/profile/security", &cookies)
+        .await;
+    assert_eq!(security.status(), StatusCode::OK);
+    let body: Value = security.json().await;
+    assert_eq!(body["password_enabled"], true);
+
+    let updated = api
+        .post_json_with_auth(
+            "/api/v1/settings/profile/password",
+            &json!({
+                "password": "Newpassword!",
+                "password_confirmation": "Newpassword!"
+            }),
+            &cookies,
+        )
+        .await;
+    assert_eq!(updated.status(), StatusCode::OK);
+    let body: Value = updated.json().await;
+    assert_eq!(body["password_enabled"], true);
+
+    let login = api
+        .post_json(
+            "/api/v1/auth/login",
+            &json!({
+                "email": "password-profile@example.com",
+                "password": "Newpassword!"
+            }),
+        )
+        .await;
+    assert_eq!(login.status(), StatusCode::OK);
+
+    api.cleanup().await;
+}
+
+#[tokio::test]
+async fn account_sso_start_creates_link_state_for_current_user() {
+    let api = TestApi::spawn().await;
+    let cookies = signup(&api, "link-state@example.com").await;
+    let user_id = current_user_id(&api, &cookies).await;
+    api.put_json_with_setup_secret(
+        "/api/v1/setup/sso/github",
+        &json!({
+            "enabled": true,
+            "client_id": "github-client",
+            "client_secret": "github-secret"
+        }),
+    )
+    .await
+    .assert_status(StatusCode::OK);
+    api.put_json_with_setup_secret("/api/v1/setup/sso/gitlab", &json!({ "enabled": false }))
+        .await
+        .assert_status(StatusCode::OK);
+
+    let start = api
+        .get_with_auth("/api/v1/settings/profile/sso/github/start", &cookies)
+        .await;
+    assert_eq!(start.status(), StatusCode::SEE_OTHER);
+    let location = start
+        .headers()
+        .get(LOCATION)
+        .and_then(|value| value.to_str().ok())
+        .unwrap();
+    assert!(location.starts_with("https://github.com/login/oauth/authorize"));
+    let state = url::Url::parse(location)
+        .unwrap()
+        .query_pairs()
+        .find_map(|(key, value)| (key == "state").then(|| value.into_owned()))
+        .unwrap();
+
+    let row: (String, i64) = sqlx::query_as(
+        r#"
+        SELECT action, user_id
+        FROM oauth_login_states
+        WHERE state_hash = $1
+        "#,
+    )
+    .bind(token_hash(&state))
+    .fetch_one(api.pool())
+    .await
+    .unwrap();
+    assert_eq!(row.0, "link");
+    assert_eq!(row.1, user_id);
+
+    api.cleanup().await;
+}
+
+#[tokio::test]
+async fn removing_final_sso_requires_password_first() {
+    let api = TestApi::spawn().await;
+    let user_id = sqlx::query_scalar::<_, i64>(
+        r#"
+        INSERT INTO users (email, username, email_verified_at)
+        VALUES ('sso-only@example.com', 'sso-only', now())
+        RETURNING id
+        "#,
+    )
+    .fetch_one(api.pool())
+    .await
+    .unwrap();
+    sqlx::query(
+        r#"
+        INSERT INTO auth_identities (
+            provider,
+            provider_user_id,
+            user_id,
+            email,
+            username
+        )
+        VALUES ('github', 'github-123', $1, 'sso-only@example.com', 'sso-only')
+        "#,
+    )
+    .bind(user_id)
+    .execute(api.pool())
+    .await
+    .unwrap();
+    let cookies = create_session(api.pool(), user_id).await;
+
+    let blocked = api
+        .delete_with_auth("/api/v1/settings/profile/sso/github", &cookies)
+        .await;
+    assert_eq!(blocked.status(), StatusCode::CONFLICT);
+    let body: Value = blocked.json().await;
+    assert_eq!(body["error"], "password_required");
+
+    let password = api
+        .post_json_with_auth(
+            "/api/v1/settings/profile/password",
+            &json!({
+                "password": "Addedpass!",
+                "password_confirmation": "Addedpass!"
+            }),
+            &cookies,
+        )
+        .await;
+    assert_eq!(password.status(), StatusCode::OK);
+
+    let removed = api
+        .delete_with_auth("/api/v1/settings/profile/sso/github", &cookies)
+        .await;
+    assert_eq!(removed.status(), StatusCode::OK);
+    let body: Value = removed.json().await;
+    assert_eq!(body["password_enabled"], true);
+    assert_eq!(body["identities"].as_array().unwrap().len(), 0);
 
     api.cleanup().await;
 }
@@ -256,4 +438,42 @@ async fn set_signup_code(api: &TestApi, email: &str, code: &str) {
 
 fn token_hash(token: &str) -> String {
     URL_SAFE_NO_PAD.encode(Sha256::digest(token.as_bytes()))
+}
+
+async fn create_session(pool: &sqlx::PgPool, user_id: i64) -> TestAuthCookies {
+    let cookies = TestAuthCookies {
+        access: format!("access-{user_id}"),
+        refresh: format!("refresh-{user_id}"),
+        csrf: format!("csrf-{user_id}"),
+    };
+
+    sqlx::query(
+        r#"
+        INSERT INTO auth_sessions (
+            user_id,
+            access_token_hash,
+            refresh_token_hash,
+            csrf_token_hash,
+            access_expires_at,
+            refresh_expires_at
+        )
+        VALUES (
+            $1,
+            $2,
+            $3,
+            $4,
+            now() + interval '15 minutes',
+            now() + interval '30 days'
+        )
+        "#,
+    )
+    .bind(user_id)
+    .bind(token_hash(&cookies.access))
+    .bind(token_hash(&cookies.refresh))
+    .bind(token_hash(&cookies.csrf))
+    .execute(pool)
+    .await
+    .unwrap();
+
+    cookies
 }

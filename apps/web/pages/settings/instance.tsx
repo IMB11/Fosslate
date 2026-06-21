@@ -83,9 +83,6 @@ export default function InstanceSettingsPage({
             <Text as="h1" className="text-3xl">
               Instance
             </Text>
-            <p className="text-sm text-muted-foreground">
-              Authentication and email delivery settings.
-            </p>
           </div>
           {isAdmin ? (
             <Badge className="w-fit gap-2" variant="surface">
@@ -225,12 +222,12 @@ function SsoSettingsForm({
         enabled,
         ...(enabled
           ? {
-              client_id: clientId.trim(),
-              ...(clientSecret.trim()
-                ? { client_secret: clientSecret.trim() }
-                : {}),
-              ...(provider === "gitlab" ? { base_url: baseUrl.trim() } : {}),
-            }
+            client_id: clientId.trim(),
+            ...(clientSecret.trim()
+              ? { client_secret: clientSecret.trim() }
+              : {}),
+            ...(provider === "gitlab" ? { base_url: baseUrl.trim() } : {}),
+          }
           : {}),
       }),
     onSuccess: (settings) => {

@@ -1,20 +1,40 @@
 use axum::{
     Json,
     extract::{Path, State},
+    http::StatusCode,
+    response::Redirect,
 };
 use serde::Deserialize;
 
 use crate::{
     app::AppState,
     error::{AppError, AppResult},
-    models::{AuthUser, AuthUserResponse, InstanceSettings},
+    models::{AccountSecurityResponse, AuthUser, AuthUserResponse, InstanceSettings},
     routes::auth::CurrentUser,
-    services::instance_settings::{SaveInstanceSsoProvider, TestInstanceEmailDelivery},
+    services::{
+        auth::UpdateAccountPasswordInput,
+        instance_settings::{SaveInstanceSsoProvider, TestInstanceEmailDelivery},
+    },
 };
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct ClaimInstanceAdminRequest {
     pub setup_secret: String,
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct UpdateAccountPasswordRequest {
+    pub password: String,
+    pub password_confirmation: String,
+}
+
+impl From<UpdateAccountPasswordRequest> for UpdateAccountPasswordInput {
+    fn from(request: UpdateAccountPasswordRequest) -> Self {
+        Self {
+            password: request.password,
+            password_confirmation: request.password_confirmation,
+        }
+    }
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
@@ -80,6 +100,118 @@ pub async fn claim_instance_admin(
         .claim_admin(&current_user, &request.setup_secret)
         .await?;
     Ok(Json(AuthUserResponse { user }))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/settings/profile/security",
+    tag = "settings",
+    operation_id = "get_account_security",
+    summary = "Get current account auth methods",
+    description = "Returns whether the current user has a password and which GitHub/GitLab identities are connected.",
+    responses(
+        (status = 200, description = "Current account auth methods.", body = AccountSecurityResponse),
+        (status = 401, description = "No valid session.", body = crate::error::ErrorBody),
+        (status = 500, description = "Database request failed.", body = crate::error::ErrorBody)
+    )
+)]
+pub async fn get_account_security(
+    State(state): State<AppState>,
+    CurrentUser(current_user): CurrentUser,
+) -> AppResult<Json<AccountSecurityResponse>> {
+    Ok(Json(
+        state.services.auth.account_security(&current_user).await?,
+    ))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/settings/profile/password",
+    tag = "settings",
+    operation_id = "update_account_password",
+    summary = "Set current account password",
+    description = "Sets or replaces the password for the currently authenticated account using the standard password policy.",
+    request_body(content = UpdateAccountPasswordRequest),
+    responses(
+        (status = 200, description = "Updated account auth methods.", body = AccountSecurityResponse),
+        (status = 400, description = "Password request is invalid.", body = crate::error::ErrorBody),
+        (status = 401, description = "No valid session.", body = crate::error::ErrorBody),
+        (status = 500, description = "Database request failed.", body = crate::error::ErrorBody)
+    )
+)]
+pub async fn update_account_password(
+    State(state): State<AppState>,
+    CurrentUser(current_user): CurrentUser,
+    Json(request): Json<UpdateAccountPasswordRequest>,
+) -> AppResult<Json<AccountSecurityResponse>> {
+    Ok(Json(
+        state
+            .services
+            .auth
+            .update_account_password(&current_user, request.into())
+            .await?,
+    ))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/settings/profile/sso/{provider}/start",
+    tag = "settings",
+    operation_id = "start_account_sso",
+    summary = "Start linking an SSO identity",
+    description = "Starts an OAuth flow that links the resolved GitHub/GitLab identity to the currently authenticated account.",
+    params(("provider" = String, Path, description = "`github` or `gitlab`.")),
+    responses(
+        (status = 303, description = "Redirect to provider authorization URL."),
+        (status = 401, description = "No valid session.", body = crate::error::ErrorBody),
+        (status = 404, description = "Provider is not configured.", body = crate::error::ErrorBody),
+        (status = 409, description = "Provider is already linked.", body = crate::error::ErrorBody),
+        (status = 500, description = "Database request failed.", body = crate::error::ErrorBody)
+    )
+)]
+pub async fn start_account_sso(
+    State(state): State<AppState>,
+    CurrentUser(current_user): CurrentUser,
+    Path(provider): Path<String>,
+) -> AppResult<Redirect> {
+    let start = state
+        .services
+        .auth
+        .start_account_sso(&current_user, &provider)
+        .await?;
+    Ok(Redirect::to(&start.redirect_url))
+}
+
+#[utoipa::path(
+    delete,
+    path = "/api/v1/settings/profile/sso/{provider}",
+    tag = "settings",
+    operation_id = "remove_account_sso",
+    summary = "Remove a linked SSO identity",
+    description = "Removes a GitHub/GitLab identity from the current account. If this is the final SSO identity, the account must already have a password.",
+    params(("provider" = String, Path, description = "`github` or `gitlab`.")),
+    responses(
+        (status = 200, description = "Updated account auth methods.", body = AccountSecurityResponse),
+        (status = 401, description = "No valid session.", body = crate::error::ErrorBody),
+        (status = 409, description = "A password must be added before removing the final SSO identity.", body = crate::error::ErrorBody),
+        (status = 500, description = "Database request failed.", body = crate::error::ErrorBody)
+    )
+)]
+pub async fn remove_account_sso(
+    State(state): State<AppState>,
+    CurrentUser(current_user): CurrentUser,
+    Path(provider): Path<String>,
+) -> AppResult<(StatusCode, Json<AccountSecurityResponse>)> {
+    Ok((
+        StatusCode::OK,
+        Json(
+            state
+                .services
+                .auth
+                .remove_account_sso(&current_user, &provider)
+                .await?,
+        ),
+    ))
 }
 
 #[utoipa::path(

@@ -153,6 +153,44 @@ impl PostgresAdapter {
         Ok(())
     }
 
+    pub async fn set_auth_provider_enabled(
+        &self,
+        provider: &str,
+        enabled: bool,
+        scopes: &[String],
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            r#"
+            INSERT INTO auth_provider_configs (
+                provider,
+                enabled,
+                skipped_at,
+                base_url,
+                client_id,
+                client_secret_ciphertext,
+                scopes,
+                configured_at
+            )
+            VALUES ($1, $2, NULL, NULL, NULL, NULL, $3, NULL)
+            ON CONFLICT (provider) DO UPDATE
+            SET
+                enabled = EXCLUDED.enabled,
+                skipped_at = NULL,
+                scopes = CASE
+                    WHEN auth_provider_configs.scopes = '{}' THEN EXCLUDED.scopes
+                    ELSE auth_provider_configs.scopes
+                END
+            "#,
+        )
+        .bind(provider)
+        .bind(enabled)
+        .bind(scopes)
+        .execute(self.pool())
+        .await?;
+
+        Ok(())
+    }
+
     pub async fn skip_auth_provider(
         &self,
         provider: &str,

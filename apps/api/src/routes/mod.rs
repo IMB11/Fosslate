@@ -77,6 +77,22 @@ pub fn router() -> Router<AppState> {
             axum::routing::post(settings::claim_instance_admin),
         )
         .route(
+            "/api/v1/settings/profile/security",
+            get(settings::get_account_security),
+        )
+        .route(
+            "/api/v1/settings/profile/password",
+            axum::routing::post(settings::update_account_password),
+        )
+        .route(
+            "/api/v1/settings/profile/sso/{provider}/start",
+            get(settings::start_account_sso),
+        )
+        .route(
+            "/api/v1/settings/profile/sso/{provider}",
+            axum::routing::delete(settings::remove_account_sso),
+        )
+        .route(
             "/api/v1/settings/instance",
             get(settings::get_instance_settings),
         )

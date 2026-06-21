@@ -5,6 +5,7 @@ import { Button } from "@/components/retroui/Button";
 import { Card } from "@/components/retroui/Card";
 import { Label } from "@/components/retroui/Label";
 import { Text } from "@/components/retroui/Text";
+import { BrandIcon } from "@/components/auth/BrandIcon";
 import { FosslateLogo } from "@/components/setup/FosslateLogo";
 import type { AuthProviderAvailability, AuthProviders } from "@/lib/auth-client";
 
@@ -98,9 +99,9 @@ export function AuthSsoButtons({
   redirectTo: string;
 }) {
   const buttons = [
-    providerButton("GitHub", providers?.sso.github, redirectTo),
-    providerButton("GitLab", providers?.sso.gitlab, redirectTo),
-  ].filter((button): button is { label: string; url: string } => Boolean(button));
+    providerButton("github", "GitHub", providers?.sso.github, redirectTo),
+    providerButton("gitlab", "GitLab", providers?.sso.gitlab, redirectTo),
+  ].filter((button): button is ProviderButton => Boolean(button));
 
   if (buttons.length === 0) {
     return null;
@@ -122,6 +123,7 @@ export function AuthSsoButtons({
             type="button"
             variant="outline"
           >
+            <BrandIcon brand={button.brand} className="mr-2 size-4" />
             {button.label}
           </Button>
         ))}
@@ -130,11 +132,18 @@ export function AuthSsoButtons({
   );
 }
 
+type ProviderButton = {
+  brand: "github" | "gitlab";
+  label: string;
+  url: string;
+};
+
 function providerButton(
+  brand: "github" | "gitlab",
   label: string,
   provider: AuthProviderAvailability | undefined,
   redirectTo: string,
-): { label: string; url: string } | null {
+): ProviderButton | null {
   if (!provider?.enabled || !provider.start_url) {
     return null;
   }
@@ -144,5 +153,5 @@ function providerButton(
     redirectTo,
   )}`;
 
-  return { label, url };
+  return { brand, label, url };
 }

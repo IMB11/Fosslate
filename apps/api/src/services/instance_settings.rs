@@ -81,7 +81,7 @@ impl InstanceSettingsService {
 
         if !input.enabled {
             self.postgres
-                .skip_auth_provider(provider, &scopes(provider_scopes))
+                .set_auth_provider_enabled(provider, false, &scopes(provider_scopes))
                 .await?;
             return self.current_settings().await;
         }

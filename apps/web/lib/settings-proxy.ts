@@ -3,7 +3,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { backendBaseUrl } from "@/lib/setup-proxy";
 
 const SETTINGS_PREFIX = "/api/v1/settings";
-const SETTINGS_METHODS = ["GET", "POST", "PUT"];
+const SETTINGS_METHODS = ["DELETE", "GET", "POST", "PUT"];
 
 type HeaderValue = string | string[] | undefined;
 
@@ -24,16 +24,22 @@ export async function proxySettingsRequest(
       headers: requestHeaders(request),
       body: request.method === "GET" ? undefined : requestBody(request),
       cache: "no-store",
+      redirect: "manual",
     },
   );
 
   const text = await backendResponse.text();
   const contentType = backendResponse.headers.get("content-type");
+  const location = backendResponse.headers.get("location");
 
   response.status(backendResponse.status);
 
   if (contentType) {
     response.setHeader("Content-Type", contentType);
+  }
+
+  if (location) {
+    response.setHeader("Location", location);
   }
 
   if (!text) {
