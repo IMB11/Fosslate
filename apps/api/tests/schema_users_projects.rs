@@ -300,6 +300,23 @@ async fn signup(api: &TestApi) -> TestAuthCookies {
     )
     .await
     .assert_status(StatusCode::OK)
+    .auth_cookies();
+
+    sqlx::query("UPDATE users SET is_admin = true WHERE email = $1")
+        .bind(&email)
+        .execute(api.pool())
+        .await
+        .unwrap();
+
+    api.post_json(
+        "/api/v1/auth/login",
+        &json!({
+            "email": email,
+            "password": "Password!"
+        }),
+    )
+    .await
+    .assert_status(StatusCode::OK)
     .auth_cookies()
 }
 

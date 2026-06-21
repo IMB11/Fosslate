@@ -12,8 +12,20 @@ async fn signup_sets_session_cookies_and_protects_product_routes() {
     let api = TestApi::spawn().await;
     configure_email_delivery(&api).await;
 
-    let protected = api.get("/api/v1/projects").await;
-    assert_eq!(protected.status(), StatusCode::UNAUTHORIZED);
+    let public_list = api.get("/api/v1/projects").await;
+    assert_eq!(public_list.status(), StatusCode::OK);
+
+    let protected_write = api
+        .post_json(
+            "/api/v1/projects",
+            &json!({
+                "name": "No session",
+                "icon_asset_id": null,
+                "source_language": { "key": "en", "name": "English" }
+            }),
+        )
+        .await;
+    assert_eq!(protected_write.status(), StatusCode::UNAUTHORIZED);
 
     let email = "admin@example.com";
     let start = api
@@ -58,6 +70,25 @@ async fn signup_sets_session_cookies_and_protects_product_routes() {
         )
         .await;
     assert_eq!(missing_csrf.status(), StatusCode::FORBIDDEN);
+
+    let non_admin = api
+        .post_json_with_auth(
+            "/api/v1/projects",
+            &json!({
+                "name": "No admin",
+                "icon_asset_id": null,
+                "source_language": { "key": "en", "name": "English" }
+            }),
+            &cookies,
+        )
+        .await;
+    assert_eq!(non_admin.status(), StatusCode::FORBIDDEN);
+
+    sqlx::query("UPDATE users SET is_admin = true WHERE email = $1")
+        .bind(email)
+        .execute(api.pool())
+        .await
+        .unwrap();
 
     let created = api
         .post_json_with_auth(

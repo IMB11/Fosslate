@@ -485,10 +485,11 @@ impl TestApp {
     async fn default_auth_user_id(&self) -> i64 {
         sqlx::query_scalar::<_, i64>(
             r#"
-            INSERT INTO users (username, email, email_verified_at)
-            VALUES ('__test_auth_user', '__test_auth_user@example.test', now())
+            INSERT INTO users (username, email, email_verified_at, is_admin)
+            VALUES ('__test_auth_user', '__test_auth_user@example.test', now(), true)
             ON CONFLICT (username) DO UPDATE
-            SET email = EXCLUDED.email
+            SET email = EXCLUDED.email,
+                is_admin = true
             RETURNING id
             "#,
         )

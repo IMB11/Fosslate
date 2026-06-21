@@ -473,6 +473,65 @@ fn is_public_request(method: &Method, path: &str) -> bool {
     path == "/api/v1/meta"
         || path.starts_with("/api/v1/auth/")
         || path.starts_with("/api/v1/setup/")
+        || is_public_project_read(method, path)
+}
+
+fn is_public_project_read(method: &Method, path: &str) -> bool {
+    if !matches!(*method, Method::GET | Method::HEAD) {
+        return false;
+    }
+
+    let segments = path.trim_start_matches('/').split('/').collect::<Vec<_>>();
+
+    match segments.as_slice() {
+        ["api", "v1", "projects"] => true,
+        ["api", "v1", "projects", _project_public_id] => true,
+        ["api", "v1", "projects", _project_public_id, "languages"] => true,
+        ["api", "v1", "projects", _project_public_id, "namespaces"] => true,
+        [
+            "api",
+            "v1",
+            "projects",
+            _project_public_id,
+            "namespaces",
+            _namespace_id,
+        ] => true,
+        [
+            "api",
+            "v1",
+            "projects",
+            _project_public_id,
+            "namespaces",
+            _namespace_id,
+            "strings",
+        ] => true,
+        [
+            "api",
+            "v1",
+            "projects",
+            _project_public_id,
+            "stats",
+            "namespaces",
+        ] => true,
+        [
+            "api",
+            "v1",
+            "projects",
+            _project_public_id,
+            "strings",
+            _string_id,
+        ] => true,
+        [
+            "api",
+            "v1",
+            "projects",
+            _project_public_id,
+            "strings",
+            _string_id,
+            "translations",
+        ] => true,
+        _ => false,
+    }
 }
 
 fn requires_csrf(method: &Method) -> bool {

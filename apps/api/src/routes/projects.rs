@@ -8,8 +8,9 @@ use uuid::Uuid;
 
 use crate::{
     app::AppState,
-    error::AppResult,
-    models::{Language, Project},
+    error::{AppError, AppResult},
+    models::{AuthUser, Language, Project},
+    routes::auth::CurrentUser,
     services::projects::{CreateProject, UpdateProject},
 };
 
@@ -63,13 +64,16 @@ impl From<UpdateProjectRequest> for UpdateProject {
     request_body(content = CreateProjectRequest, description = "Project attributes to create."),
     responses(
         (status = 201, description = "Project created.", body = Project),
+        (status = 403, description = "Current user is not an admin.", body = crate::error::ErrorBody),
         (status = 500, description = "Database request failed.", body = crate::error::ErrorBody)
     )
 )]
 pub async fn create_project(
     State(state): State<AppState>,
+    CurrentUser(current_user): CurrentUser,
     Json(request): Json<CreateProjectRequest>,
 ) -> AppResult<(StatusCode, Json<Project>)> {
+    ensure_admin(&current_user)?;
     let project = state
         .services
         .projects
@@ -173,4 +177,12 @@ pub async fn delete_project(
         .delete_project(project_public_id)
         .await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+fn ensure_admin(user: &AuthUser) -> AppResult<()> {
+    if user.is_admin {
+        Ok(())
+    } else {
+        Err(AppError::Forbidden)
+    }
 }
