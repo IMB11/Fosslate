@@ -6,6 +6,40 @@ use serde_json::{Value, json};
 use common::TestApi;
 
 #[tokio::test]
+async fn setup_check_returns_empty_status_for_required_or_complete() {
+    let api = TestApi::spawn().await;
+
+    let initial = api.get("/setup/check").await;
+    assert_eq!(initial.status(), StatusCode::NO_CONTENT);
+
+    api.put_json_with_setup_secret("/api/v1/setup/sso/github", &json!({ "enabled": false }))
+        .await
+        .assert_status(StatusCode::OK);
+    api.put_json_with_setup_secret("/api/v1/setup/sso/gitlab", &json!({ "enabled": false }))
+        .await
+        .assert_status(StatusCode::OK);
+    api.post_json_with_setup_secret(
+        "/api/v1/setup/email/test",
+        &json!({
+            "resend_api_key": "re_test",
+            "from_name": "Fosslate",
+            "from_email": "hello@example.com",
+            "test_recipient": "admin@example.com"
+        }),
+    )
+    .await
+    .assert_status(StatusCode::OK);
+    api.post_json_with_setup_secret("/api/v1/setup/complete", &json!({}))
+        .await
+        .assert_status(StatusCode::OK);
+
+    let complete = api.get("/setup/check").await;
+    assert_eq!(complete.status(), StatusCode::NOT_FOUND);
+
+    api.cleanup().await;
+}
+
+#[tokio::test]
 async fn setup_routes_require_valid_bearer_secret() {
     let api = TestApi::spawn().await;
 

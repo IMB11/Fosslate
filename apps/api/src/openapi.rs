@@ -24,6 +24,7 @@ use crate::app::AppState;
         crate::routes::projects::get_project,
         crate::routes::projects::list_projects,
         crate::routes::projects::update_project,
+        crate::routes::setup::check_setup_required,
         crate::routes::setup::complete_setup,
         crate::routes::setup::get_setup_status,
         crate::routes::setup::save_github_sso_setup,

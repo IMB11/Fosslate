@@ -71,6 +71,10 @@ impl SetupService {
         self.status_unchecked().await
     }
 
+    pub async fn setup_required(&self) -> AppResult<bool> {
+        Ok(!self.postgres.setup_completed().await?)
+    }
+
     pub async fn save_github_sso(
         &self,
         authorization: Option<&str>,

@@ -427,6 +427,7 @@ async fn openapi_json_contains_route_groups_and_core_paths() {
 
     let paths = document["paths"].as_object().unwrap();
     for path in [
+        "/setup/check",
         "/api/v1/users",
         "/api/v1/setup/verify",
         "/api/v1/setup/status",

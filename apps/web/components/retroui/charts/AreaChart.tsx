@@ -116,7 +116,7 @@ const AreaChart = React.forwardRef<HTMLDivElement, AreaChartProps>(
                         {payload.map((entry, index) => (
                           <div key={index} className="flex flex-col">
                             <span className="text-[0.70rem] uppercase text-muted-foreground">
-                              {entry.dataKey}
+                            {String(entry.dataKey)}
                             </span>
                             <span className="font-bold" style={{ color: strokeColors[0] }}>
                               {valueFormatter(entry.value as number)}

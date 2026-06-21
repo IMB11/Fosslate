@@ -1,7 +1,7 @@
 use axum::{
     Json,
     extract::State,
-    http::{HeaderMap, header},
+    http::{HeaderMap, StatusCode, header},
 };
 use serde::Deserialize;
 
@@ -55,6 +55,27 @@ impl From<TestEmailDeliveryRequest> for TestEmailDelivery {
             from_email: request.from_email,
             test_recipient: request.test_recipient,
         }
+    }
+}
+
+#[utoipa::path(
+    get,
+    path = "/setup/check",
+    tag = "setup",
+    operation_id = "check_setup_required",
+    summary = "Check whether first-run setup is required",
+    description = "Returns an empty 204 response when setup is required, or 404 when setup is already complete.",
+    responses(
+        (status = 204, description = "Setup is required."),
+        (status = 404, description = "Setup is already complete."),
+        (status = 500, description = "Database request failed.", body = crate::error::ErrorBody)
+    )
+)]
+pub async fn check_setup_required(State(state): State<AppState>) -> AppResult<StatusCode> {
+    if state.services.setup.setup_required().await? {
+        Ok(StatusCode::NO_CONTENT)
+    } else {
+        Ok(StatusCode::NOT_FOUND)
     }
 }
 

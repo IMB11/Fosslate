@@ -18,6 +18,7 @@ pub mod votes;
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/health", get(health::health))
+        .route("/setup/check", get(setup::check_setup_required))
         .route("/api/v1/meta", get(meta::meta))
         .route("/api/v1/setup/verify", axum::routing::post(setup::verify_setup_secret))
         .route("/api/v1/setup/status", get(setup::get_setup_status))
