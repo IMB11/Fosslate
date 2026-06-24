@@ -103,7 +103,7 @@ export default function InstanceSettingsPage({
         {user && !isAdmin ? (
           <section className="border-2 border-border bg-card p-5 shadow-md">
             <div className="mb-5 flex items-start gap-3">
-              <div className="flex size-10 shrink-0 items-center justify-center border-2 border-border bg-primary">
+              <div className="flex size-10 shrink-0 items-center justify-center border-2 border-border bg-primary text-primary-foreground">
                 <Lock aria-hidden="true" className="size-5" />
               </div>
               <div className="space-y-1">
@@ -403,7 +403,7 @@ function EmailSettingsForm({
     <section className="border-2 border-border bg-card p-5 shadow-md">
       <form className="space-y-5" onSubmit={handleSubmit}>
         <div className="flex items-start gap-3">
-          <div className="flex size-10 shrink-0 items-center justify-center border-2 border-border bg-primary">
+          <div className="flex size-10 shrink-0 items-center justify-center border-2 border-border bg-primary text-primary-foreground">
             <Mail aria-hidden="true" className="size-5" />
           </div>
           <div className="space-y-1">

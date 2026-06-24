@@ -1,11 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, LogOut, Settings } from "lucide-react";
+import { ChevronDown, LogOut, Moon, Settings, Sun } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/router";
+import { useEffect, useState } from "react";
 
 import { Avatar } from "@/components/retroui/Avatar";
 import { buttonVariants } from "@/components/retroui/Button";
 import { Menu } from "@/components/retroui/Menu";
+import { Switch } from "@/components/retroui/Switch";
 import { FosslateLogo } from "@/components/setup/FosslateLogo";
 import {
   getOptionalAuthSession,
@@ -15,6 +17,7 @@ import {
 import { cn } from "@/lib/utils";
 
 const authSessionQueryKey = ["authSession"];
+const themeStorageKey = "darkMode";
 
 type NavbarProps = {
   initialUser?: AuthUser | null;
@@ -89,6 +92,22 @@ function AccountMenu({
 }) {
   const router = useRouter();
   const fallback = avatarFallback(user);
+  const [isDarkMode, setIsDarkMode] = useState(false);
+
+  useEffect(() => {
+    setIsDarkMode(document.documentElement.classList.contains("dark"));
+  }, []);
+
+  function toggleDarkMode() {
+    const nextDarkMode = !isDarkMode;
+
+    document.documentElement.classList.toggle("dark", nextDarkMode);
+    window.localStorage.setItem(
+      themeStorageKey,
+      nextDarkMode ? "dark" : "light",
+    );
+    setIsDarkMode(nextDarkMode);
+  }
 
   return (
     <Menu>
@@ -114,6 +133,25 @@ function AccountMenu({
         >
           <Settings aria-hidden="true" className="size-4" />
           Settings
+        </Menu.Item>
+        <Menu.Item
+          className="justify-between gap-3 px-3 py-2 font-head text-sm"
+          onClick={toggleDarkMode}
+        >
+          <span className="flex items-center gap-2">
+            {isDarkMode ? (
+              <Moon aria-hidden="true" className="size-4" />
+            ) : (
+              <Sun aria-hidden="true" className="size-4" />
+            )}
+            Dark mode
+          </span>
+          <Switch
+            aria-hidden="true"
+            checked={isDarkMode}
+            className="pointer-events-none"
+            tabIndex={-1}
+          />
         </Menu.Item>
         <Menu.Item
           className="gap-2 px-3 py-2 font-head text-sm"

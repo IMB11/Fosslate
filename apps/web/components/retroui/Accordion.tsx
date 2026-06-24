@@ -37,7 +37,7 @@ const AccordionHeader = ({ className, children, ref, ...props }: BaseAccordion.T
 const AccordionContent = ({ className, children, ref, ...props }:   BaseAccordion.Panel.Props) => (
   <BaseAccordion.Panel
     ref={ref}
-    className="overflow-hidden font-body bg-white text-gray-700 data-[open]:animate-accordion-down data-[closed]:animate-accordion-up"
+    className="overflow-hidden font-body bg-background text-muted-foreground data-[open]:animate-accordion-down data-[closed]:animate-accordion-up"
     {...props}
   >
     <div className={cn("px-4 pt-2 pb-4", className)}>{children}</div>

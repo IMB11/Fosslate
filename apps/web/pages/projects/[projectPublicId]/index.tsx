@@ -201,7 +201,7 @@ function ProjectHeader({
   return (
     <header className="flex flex-col gap-5 border-2 border-border bg-card p-5 shadow-md lg:flex-row lg:items-center lg:justify-between">
       <div className="flex min-w-0 gap-4">
-        <div className="flex size-14 shrink-0 items-center justify-center border-2 border-border bg-primary font-head text-2xl font-bold">
+        <div className="flex size-14 shrink-0 items-center justify-center border-2 border-border bg-primary font-head text-2xl font-bold text-primary-foreground">
           {project.project.name.trim().charAt(0).toUpperCase() || "F"}
         </div>
         <div className="min-w-0 space-y-2">
@@ -265,7 +265,7 @@ function ProjectTab({
       className={cn(
         "flex min-h-10 shrink-0 items-center gap-2 border-2 border-transparent px-3 py-2 font-head text-sm transition",
         "hover:border-border hover:bg-accent",
-        active && "border-border bg-primary shadow-sm",
+        active && "border-border bg-primary text-primary-foreground shadow-sm",
       )}
       type="button"
     >
@@ -321,7 +321,7 @@ function LanguageChip({
     <Link
       className={cn(
         "border-2 border-border px-3 py-1 font-head text-sm shadow-xs transition hover:translate-y-0.5 hover:bg-accent",
-        active ? "bg-primary" : "bg-background",
+        active ? "bg-primary text-primary-foreground" : "bg-background",
       )}
       href={href}
     >

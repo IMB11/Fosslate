@@ -28,7 +28,7 @@ export function SettingsLayout({ children }: { children: ReactNode }) {
                   className={cn(
                     "flex min-h-11 shrink-0 items-center gap-3 rounded border-2 border-transparent px-3 py-2 font-head text-sm transition",
                     "hover:border-border hover:bg-accent",
-                    active && "border-border bg-primary shadow-sm",
+                    active && "border-border bg-primary text-primary-foreground shadow-sm",
                   )}
                   href={item.href}
                   key={item.href}

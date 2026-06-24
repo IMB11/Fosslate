@@ -14,10 +14,10 @@ const Slider = ({ className, ref, ...props }: React.ComponentPropsWithRef<typeof
     )}
     {...props}
   >
-    <BaseSlider.Track className="relative h-3 w-full grow overflow-hidden bg-background border-2">
+    <BaseSlider.Track className="relative h-3 w-full grow overflow-hidden border-2 border-border bg-background">
       <BaseSlider.Indicator className="absolute h-full bg-primary" />
     </BaseSlider.Track>
-    <BaseSlider.Thumb className="block h-4.5 w-4.5 border-2 bg-background shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50" />
+    <BaseSlider.Thumb className="block h-4.5 w-4.5 border-2 border-border bg-background shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50" />
   </BaseSlider.Root>
 );
 
